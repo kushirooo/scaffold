@@ -1,0 +1,11 @@
+=== server stopped? ===
+port 4000 closed
+HTTP root: 000no-response
+
+=== final DB counts (users/sessions/credentials) ===
+raf_pms:      6/53/5
+raf_pms_e2e:  6/14/5
+raf_pms_e2e token_versions: admin@rafconsult.test=0, inactive@rafconsult.test=0, invited@rafconsult.test=0, pm@rafconsult.test=0, viewer@rafconsult.test=0, worker@rafconsult.test=0
+
+=== no secrets in T15 evidence logs ===
+no JWT/password strings in evidence

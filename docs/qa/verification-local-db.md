@@ -11,6 +11,8 @@
 | Databases | `raf_pms` (development, migrated + seeded) and `raf_pms_test` (dedicated test DB) |
 | Verdict | **PASS** — DB-dependent checks that were `DEFERRED (no DB)` in T5/T7 are now verified locally; 0 defects; CI/staging runs and the unimplemented Phase-2 features remain out of scope |
 
+**US01 update (T13, 9 Nov 2026):** the Phase-2 US01 API (cookie transport, CSRF, CORS, `tokenVersion`, D1 redirect) is now implemented and verified: target-contract HTTP e2e **22/22** against the live dev DB, live smoke **25/25**, unit **40/40**, boot validation and static checks pass. The "in-memory e2e" limitation recorded in §5 was true at T11 and is superseded locally. Full evidence: [`verification-us01-cookies.md`](verification-us01-cookies.md). The CI e2e run (throwaway DB) and staging cookie flags remain pending.
+
 **What this PASS means:** the Prisma migration is applied to `raf_pms`, the seed produces the expected six demo accounts, the real-Postgres suite (`npm run test:db`, 22 tests) passes against `raf_pms_test` with a working dev-DB guard and no false-pass path, and the Phase-1 Bearer API works against the real database. **What it does not mean:** the cookie/CSRF reconciliation, email and reset features are still not implemented (AC matrix statuses are unchanged), the CI job has not run this, and staging does not exist. Those limits are listed in §5.
 
 Raw outputs: [`docs/qa/evidence/2026-11-09-t11/`](evidence/2026-11-09-t11/). No seed password or JWT was printed during this verification; the smoke extracted the token into a shell variable only and the evidence logs were scanned for credential strings.

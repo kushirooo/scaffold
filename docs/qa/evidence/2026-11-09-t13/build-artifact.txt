@@ -1,0 +1,5 @@
+npm run build exit=0
+-rw-r--r-- 1 anoshizuku anoshizuku 540 Nov  9 13:26 dist/main.js
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { AppModule, ObserveInstrument } from './app.module.js';

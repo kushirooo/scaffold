@@ -1,0 +1,16 @@
+=== raf_pms baseline before e2e (T13) ===
+users=6
+credentials=5
+sessions=21
+email | role | is_active | token_version
+admin@rafconsult.test | ADMIN | t | 0
+inactive@rafconsult.test | WORKER | f | 0
+invited@rafconsult.test | WORKER | t | 0
+pm@rafconsult.test | PROJECT_MANAGER | t | 0
+viewer@rafconsult.test | VIEWER | t | 0
+worker@rafconsult.test | WORKER | t | 0
+(6 rows)
+=== db names ===
+postgres
+raf_pms
+raf_pms_test
