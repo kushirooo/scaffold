@@ -171,7 +171,7 @@ Database-dependent checks (migrations applied, e2e, staging) are **not** claimed
 |---|---|---|
 | 0. Baseline | Preserve uncommitted US01; tag `pre-reconcile` | Done by Lead |
 | 1. Foundation + local DB (complete) | Prisma schema/client/repositories, ADRs, QA harness, DB bring-up | T1/T4/T5 green; T9–T11 DB tests and QA PASS |
-| 2. US01 reconciliation (current) | httpOnly cookies, `tokenVersion`, CSRF, credentialed CORS | Auth e2e green in CI; contract v2 published |
+| 2. US01 reconciliation (API complete; CI/staging pending) | httpOnly cookies, `tokenVersion`, CSRF, credentialed CORS | Contract v2 published; local e2e 25/25; CI/staging gates pending |
 | 3. US18 | Email module, seam, welcome link, non-atomic failure | Seam test + Mailtrap evidence; review/verify |
 | 4. US19 | Policy, blocklist, reset/change endpoints, invalidation | Edge-case matrix green; review/verify |
 | 5. CI/staging | Postgres CI, Resend, Railway, Vercel | Staging DoD validation |
@@ -186,14 +186,14 @@ Phase entry requires the previous gate; exceptions are explicit Lead decisions, 
 
 | Constraint | Impact | Rule |
 |---|---|---|
-| Local PostgreSQL 18 is **available** | `127.0.0.1:5432`; database `raf_pms` seeded with six users; test database `raf_pms_test` | Use it for migrations, seed and DB-backed tests. Never point tests at `raf_pms`. If the DB is down, report to the Lead; do not recreate it blindly |
+| Local PostgreSQL 18 is **available** | `127.0.0.1:5432`; database `raf_pms` seeded with six users; test/e2e databases `raf_pms_test` and `raf_pms_e2e` | Use it for migrations, seed and DB-backed tests. Never point tests at `raf_pms`. If the DB is down, report to the Lead; do not recreate it blindly |
 | Docker CLI is **not** reachable inside DSH | The daemon runs on the host but the sandbox lacks the docker gid and blocks socket access | Do not run `docker`/`docker compose` inside DSH. The human manages the container outside; agents use TCP 5432 only |
 | No `sudo` / package installs | Cannot add system services from DSH | Use project dependencies only; report if truly blocked |
 | No GitHub credentials | Cannot push or trigger CI | Local commits only; Lead tracks the push blocker |
 | Node 26 locally, Node 24 in CI | Minor version drift | Pin CI to 24; do not use Node-26-only APIs |
 | Shared checkout | Concurrent writes can collide | Stay in scope; never run git writes; announce shared-file needs |
 
-**DB commands** (from `scaffold/backend/app`): `npm run db:migrate`, `npm run db:seed`, `npx prisma migrate status`. `npm run test:db` runs against `raf_pms_test` only and refuses `raf_pms`; create `raf_pms_test` once if it is missing.
+**DB commands** (from `scaffold/backend/app`): `npm run db:migrate`, `npm run db:seed`, `npx prisma migrate status`. `npm run test:db` runs against `raf_pms_test`; `npm run test:e2e` runs against `raf_pms_e2e`. Both refuse `raf_pms`; create the two databases once if missing.
 
 **Honesty rule:** never write "migration applied", "e2e passed", or "staging verified" unless the command actually ran in this environment. Local DB checks are now runnable and must be run, not deferred; only CI/staging-only checks may be labelled `DEFERRED`.
 

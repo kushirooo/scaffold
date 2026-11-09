@@ -4,7 +4,7 @@ Monorepo scaffold for the G10-MARS Sprint 1 build: **NestJS 12 API** (`backend/a
 
 ## Sprint 1 status
 
-- **US01 — login, logout, JWT sessions, route guard:** baseline implemented on Bearer tokens and now backed by Prisma. Phase 2 reconciles it to httpOnly cookies + CSRF. Contract: [docs/api-contract-us01.md](docs/api-contract-us01.md) (v1 Bearer; v2 pending Phase 2).
+- **US01 — login, logout, sessions, route guard:** API reconciled to the locked design — httpOnly `mars_at` cookie, `tokenVersion` invalidation, required `X-MARS-CSRF` header, credentialed exact-origin CORS. Contract: [docs/api-contract-us01.md](docs/api-contract-us01.md) (v2). The frontend login page and the 401/role redirects are Member 3's remaining integration; the API returns `redirectTo: "/dashboard"` for every role.
 - **US18 / US19:** schema and password-hashing foundation in place; email and reset endpoints not started.
 - **Landing shell:** not started.
 
@@ -25,17 +25,20 @@ Local PostgreSQL 18 is exposed on `127.0.0.1:5432` (database `raf_pms`). The Com
 
 ```bash
 npm test          # unit
-npm run test:e2e  # API integration (in-memory repositories)
+npm run test:e2e  # API e2e against the dedicated raf_pms_e2e database
 npm run test:db   # real PostgreSQL integration (raf_pms_test)
 npm run lint
 npm run build
 ```
 
-`npm run test:db` expects a separate `raf_pms_test` database. Create it once:
+`npm run test:e2e` expects `raf_pms_e2e`; `npm run test:db` expects `raf_pms_test`. Neither touches `raf_pms`. Create both once:
 
 ```bash
 psql "postgresql://postgres:postgres@127.0.0.1:5432/raf_pms" -c "create database raf_pms_test;"
+psql "postgresql://postgres:postgres@127.0.0.1:5432/raf_pms" -c "create database raf_pms_e2e;"
 ```
+
+Both test suites migrate and seed their own database; the e2e guard refuses to run against `raf_pms`. CI mirrors this with a PostgreSQL 18 service container (`.github/workflows/ci.yml`).
 
 ## Repository layout
 
