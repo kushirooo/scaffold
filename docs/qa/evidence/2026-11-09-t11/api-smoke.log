@@ -1,0 +1,23 @@
+=== DB-backed API smoke (Phase-1 Bearer contract; real raf_pms) ===
+server: http://127.0.0.1:4000   database: raf_pms (via .env)
+sessions before login: unrevoked=0 revoked=1
+
+PASS  login pm -> 200
+PASS  login body shape: role=PROJECT_MANAGER redirectTo=/dashboard/projects tokenType=Bearer expiresIn=3600 tokenParts=3 tokenInBody=True noPasswordHash=True
+sessions after login: unrevoked=1 revoked=1
+session row created for pm in DB: true
+PASS  /auth/me with token -> 200
+PASS  /auth/me body: email=pm@rafconsult.test role=PROJECT_MANAGER noPasswordHash=True
+PASS  /auth/me without token -> 401
+PASS  logout with token -> 204
+sessions after logout: unrevoked=0 revoked=2
+PASS  session revoked in DB after logout (unrevoked=0)
+PASS  /auth/me with pre-logout token -> 401
+PASS  invited account login -> 401
+PASS  inactive account login -> 401
+PASS  invited and inactive responses are byte-identical
+PASS  generic message: "Invalid email or password"
+PASS  no passwordHash in login/me bodies
+
+RESULT: PASS (13/13 checks)
+RESULT_EXIT=0

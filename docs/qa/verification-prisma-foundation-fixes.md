@@ -13,6 +13,8 @@
 
 **Scope of this pass:** only the T6 delta (new repository specs, generated-client format/coverage boundaries, seed transaction shape). The schema, migration and Prisma wiring were verified in T5 and are unchanged by T6; they are not re-litigated here. No source was edited during verification — the mutation run used a throwaway copy under `/tmp` and the original files' digest was identical before and after.
 
+**DB addendum (T11, 9 Nov 2026):** the real-Postgres checks deferred in §8 are now verified locally after T9 — migration applied to `raf_pms`, seed verified, `npm run test:db` **22/22** against `raf_pms_test`, and the DB-backed Phase-1 API smoke **13/13**. Evidence: [`verification-local-db.md`](verification-local-db.md). CI/staging runs remain pending.
+
 Raw outputs: [`docs/qa/evidence/2026-11-09-t7/`](evidence/2026-11-09-t7/).
 
 ---
@@ -155,7 +157,7 @@ This removes the 5 s interactive-transaction timeout risk from CPU-heavy argon2i
 | `prisma db seed` / `npm run db:setup` execution (hashing order is verified statically) | No DB | CI (test DB) / staging demo seed |
 | `findByEmail`/session uniqueness and FK/cascade behaviour at the SQL layer | No DB | CI e2e (Day 6) |
 
-None of these is reported as passed.
+None of these was reported as passed in T7. **T11 update (9 Nov 2026):** all four items were subsequently verified locally against `raf_pms`/`raf_pms_test` (migration applied, seed verified, `npm run test:db` 22/22); see the DB addendum at the top and [`verification-local-db.md`](verification-local-db.md). CI/staging runs remain pending.
 
 ---
 

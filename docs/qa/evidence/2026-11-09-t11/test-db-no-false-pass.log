@@ -1,0 +1,29 @@
+=== cleanup: drop the stray probe database created by migrate deploy ===
+DROP DATABASE
+0
+
+=== no-false-pass: TEST_DATABASE_URL unreachable (migration cannot be applied) ===
+Error: Failed to apply Prisma migrations to the test database (raf_pms_test at 127.0.0.1:5999). Create the database first, e.g. `createdb raf_pms_test` on the local PostgreSQL server.
+ ❯ Object.globalSetup [as setup] test/db/global-setup.ts:32:11
+     30|     });
+     31|   } catch {
+     32|     throw new Error(
+       |           ^
+     33|       `Failed to apply Prisma migrations to the test database (${descr…
+     34|         'Create the database first, e.g. `createdb raf_pms_test` on th…
+ ❯ TestProject._initializeGlobalSetup node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:10813:50
+ ❯ Vitest.initializeGlobalSetup node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13812:35
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13655:6
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13684:11
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13546:19
+ ❯ startVitest node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:14621:8
+ ❯ start node_modules/vitest/dist/chunks/cac.uFydS1Z4.js:2340:15
+ ❯ CAC.run node_modules/vitest/dist/chunks/cac.uFydS1Z4.js:2318:2
+
+
+
+
+unreachable-db exit=1
+
+=== raf_pms unchanged after guard + failure probes (must be 6) ===
+6

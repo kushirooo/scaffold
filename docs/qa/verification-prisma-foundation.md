@@ -16,6 +16,8 @@
 
 **Follow-up (T7, 9 Nov 2026):** the T4 review fixes F1/F2/F4 were re-verified after T6 in [`verification-prisma-foundation-fixes.md`](verification-prisma-foundation-fixes.md) — verdict **PASS**, F1 mutation-tested 8/8, F2 generated-client boundaries closed (resolves OBS-4), F4 seed hashing moved before the transaction; DB checks remain `DEFERRED (no DB)`.
 
+**DB addendum (T11, 9 Nov 2026):** local PostgreSQL became available after T9, so the DB-dependent items deferred in §6 have now been verified locally — `raf_pms` migrated and seeded with six accounts, `npm run test:db` **22/22** against `raf_pms_test`, and the DB-backed Phase-1 Bearer API smoke **13/13**. Evidence: [`verification-local-db.md`](verification-local-db.md). CI/staging runs remain pending.
+
 Method: commands were run directly from `scaffold/backend/app` after the backend agent stopped installing/generating. No `npm install`, no source edits, no Git writes, no database connection. Raw outputs are in [`docs/qa/evidence/2026-11-09-t5/`](evidence/2026-11-09-t5/).
 
 ---
@@ -201,6 +203,8 @@ Findings are limited to the P3 observations below; none blocks T1 acceptance, th
 ---
 
 ## 6. Deferred register — `DEFERRED (no DB)`
+
+> **T11 note (9 Nov 2026):** all rows below were subsequently verified locally once the database was available — see the DB addendum at the top and [`verification-local-db.md`](verification-local-db.md). This section records the state as of T5; CI/staging runs remain pending.
 
 | Check | Why deferred | Destination | Verification owner |
 |---|---|---|---|

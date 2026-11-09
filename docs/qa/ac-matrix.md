@@ -9,7 +9,7 @@
 | Baseline | 8 Nov 2026: 11/11 unit tests green — recorded in `SPRINT1_PLAN.md` §1.3. Not re-run in T3. |
 | Last updated | 9 Nov 2026 (T3) — initial matrix |
 
-**How to read this matrix.** Each row is one backlog AC (or one landing/security check). The `Status` cell uses the [status vocabulary](strategy.md#8-status-vocabulary-used-in-the-ac-matrix). On 9 Nov 2026 every row is `not yet implemented`: Phase 1 is the Prisma foundation, the Bearer implementation is pre-reconcile and is **not** the target contract, and the cookie/CSRF/email/reset work has not started. A row changes status only when the evidence named in it exists; a DB-dependent case that only ran/starts in CI is `DEFERRED (no DB)` locally and `PASS (CI)` only when the CI run is linked.
+**How to read this matrix.** Each row is one backlog AC (or one landing/security check). The `Status` cell uses the [status vocabulary](strategy.md#8-status-vocabulary-used-in-the-ac-matrix). On 9 Nov 2026 every row is `not yet implemented`: Phase 1 is the Prisma foundation, the Bearer implementation is pre-reconcile and is **not** the target contract, and the cookie/CSRF/email/reset work has not started. A row changes status only when the evidence named in it exists. DB-dependent cases are runnable locally via `npm run test:db` (T11, `raf_pms_test`); a case that only runs in CI is marked `DEFERRED (CI)` and becomes `PASS (CI)` only when the CI run is linked.
 
 `[OPEN-1]` rows (US18 AC2, US19 AC3) are implemented **as the agreed deviation** — link instead of credentials; 12–128 length instead of character-class complexity. Evidence must say "met per agreed deviation, pending SM amendment"; the literal backlog text is **not** claimed until the Scrum Master amends it (`SPRINT1_PLAN.md` §4, §16.4).
 
@@ -88,19 +88,21 @@ These are security/correctness cases that support the ACs above or the "tokenVer
 
 ## 6. Deferred register (environment-dependent)
 
-These are the same checks above, grouped by why they cannot run in the agent sandbox. Rule: they are `DEFERRED`, never `PASS`, until run in their destination ([strategy §3.1](strategy.md#31-current-limitation-no-database-in-the-sandbox), §12).
+These are the same checks above, grouped by environment dependency. Rule: they are not `PASS` until run in their destination ([strategy §3.1](strategy.md#31-local-database-availability-t9-onward), §12). The DB rows below were **closed locally in T11**; the AC rows themselves remain `not yet implemented` because the Phase-2+ features are not built.
 
 | Group | Reason | Destination | Status |
 |---|---|---|---|
-| All `npm run test:e2e` cases (US01, US18, US19, supporting) | No Docker/Postgres in sandbox | CI `api` job (Postgres service) | `DEFERRED (no DB)` |
-| Migration apply, seed, `resetDatabase()` between specs | No DB | CI; staging pre-deploy | `DEFERRED (no DB)` |
-| DB state assertions: `sessions.revoked_at`, `token_version`, reset-token hash/TTL/used, memory inbox persistence | No DB | CI e2e | `DEFERRED (no DB)` |
+| Migration apply, seed, real-Postgres repository/schema/seed suite | Was "no DB"; local PostgreSQL 18.6 now available | Local `raf_pms` / `raf_pms_test`; CI still to be wired | `PASS (local DB)` — `npm run test:db` 22/22, migration applied, seed verified; CI run pending ([verification-local-db.md](verification-local-db.md)) |
+| HTTP e2e AC cases (US01, US18, US19) | Features still `not yet implemented`; current `test:e2e` is in-memory wiring only | CI e2e once implemented (Phase 2+) | `DEFERRED (features not implemented)` |
+| Phase-2 DB assertions: `sessions.revoked_at`, `token_version`, reset-token hash/TTL/used, cookie/CSRF state | Phase-2 features not implemented | CI e2e | `DEFERRED (features not implemented)` |
 | `scripts/smoke-staging.sh` (health/login/me/CSRF/logout) | No staging until Phase 5 | Railway staging | `DEFERRED (no staging)` |
 | Emails (Mailtrap/Resend delivery + screenshots) | No email transport/staging | Mailtrap (dev), Resend (staging) | `DEFERRED (no staging)` |
 | Landing build + responsive + axe + Lighthouse | Landing not started; final window | Local build; Vercel staging | `DEFERRED (no staging)` |
 | Cross-site cookie/CORS behaviour in a real browser | Needs Vercel origin → Railway API | Staging browser | `DEFERRED (no staging)` |
 
 **Tooling status (9 Nov 2026).** [`scripts/smoke-staging.sh`](../../scripts/smoke-staging.sh) exists, is executable, passes `bash -n`, and its control flow was self-checked against a local stub API (24/24 checks PASS) and a dead endpoint (fails with no false PASS). It has **not** run against staging: the staging URL does not exist yet. Treat every staging row above as `DEFERRED (no staging)` until a run log with the deployed commit SHA is attached.
+
+**Local DB status (T11, 9 Nov 2026).** Local PostgreSQL 18.6 is live at `127.0.0.1:5432`; `raf_pms` is migrated and seeded (6 users); `npm run test:db` passes **22/22** against `raf_pms_test`; the DB-backed Phase-1 Bearer smoke passed **13/13**. This closes the DB-deferred rows above locally, but **no AC row changes status** — cookie/CSRF, email and reset features remain `not yet implemented`. Full evidence: [`verification-local-db.md`](verification-local-db.md).
 
 ---
 
