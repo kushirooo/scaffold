@@ -83,10 +83,15 @@ The Lead owns Git because all agents share one checkout. Parallel `git add`, bra
 
 | Item | State |
 |---|---|
-| `wip/us01-bearer-baseline` | Committed `1f625b9`, tagged `pre-reconcile` |
+| `wip/us01-bearer-baseline` | Tagged `pre-reconcile` (local) |
 | `feat/prisma-foundation` | Checked out, based on the WIP baseline |
-| Remote push | **Blocked**: no GitHub credentials in this environment. Local commits only until resolved |
+| Remote | GitHub authenticated; feature branch push/PR pending |
 | `main` | Untouched at `895d6f3` |
+
+> **History note:** on 9 Nov the local feature branch was rewritten to the GitHub
+> noreply identity (`130390028+kushirooo@users.noreply.github.com`) so GitHub's
+> email-privacy rule would accept the push. Commit hashes quoted in earlier
+> review/QA evidence are pre-rewrite snapshots; use the branch and tags instead.
 
 ---
 

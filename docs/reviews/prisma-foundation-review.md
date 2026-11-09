@@ -5,7 +5,7 @@
 | Reviewer | `architect` (T4) |
 | Reviewed task | T1 — Prisma foundation for US01 schema (`backend-dev`) |
 | Date | 9 November 2026 |
-| Tree | Uncommitted working tree vs `HEAD` = `a26c73e`; baseline US01 = `1f625b9` |
+| Tree | Uncommitted working tree vs `HEAD` = `a26c73e`; baseline US01 = tag `pre-reconcile` |
 | Review mode | Read-only on code; checks were run, no source edited, no git writes |
 | **Verdict** | **PASS WITH CHANGES** — no blocking findings |
 

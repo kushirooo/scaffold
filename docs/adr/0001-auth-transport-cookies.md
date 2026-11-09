@@ -11,7 +11,7 @@
 
 ## Context
 
-The preserved baseline (commit `1f625b9`) implements US01 with Bearer tokens in the response
+The preserved baseline (tag `pre-reconcile`) implements US01 with Bearer tokens in the response
 body, a `sessions` table and raw `pg`; its contract argues "no cookies, so CSRF is not
 applicable" (`docs/api-contract-us01.md` §4). The locked stack requires httpOnly cookies, a
 `tokenVersion` compared by the guard, and Prisma (`SPRINT1_PLAN.md` §1.2). On 8 November the
