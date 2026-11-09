@@ -70,6 +70,7 @@ describe('PrismaUsersRepository (real PostgreSQL)', () => {
         fullName: 'Project Manager',
         role: 'PROJECT_MANAGER',
         isActive: true,
+        tokenVersion: 0,
         createdAt: seeded.createdAt,
         updatedAt: seeded.updatedAt,
         passwordHash: PASSWORD_HASH,
@@ -119,6 +120,7 @@ describe('PrismaUsersRepository (real PostgreSQL)', () => {
         fullName: 'Project Manager',
         role: 'PROJECT_MANAGER',
         isActive: true,
+        tokenVersion: 0,
         createdAt: seeded.createdAt,
         updatedAt: seeded.updatedAt,
       });

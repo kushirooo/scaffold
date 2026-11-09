@@ -64,6 +64,7 @@ describe('PrismaUsersRepository', () => {
         fullName: 'Aina Rahman',
         role: 'ADMIN',
         isActive: true,
+        tokenVersion: 0,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         passwordHash: 'stored-argon2-hash',
@@ -131,6 +132,7 @@ describe('PrismaUsersRepository', () => {
         fullName: 'Aina Rahman',
         role: 'ADMIN',
         isActive: true,
+        tokenVersion: 0,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
       });
@@ -187,6 +189,7 @@ describe('PrismaUsersRepository', () => {
         fullName: 'New User',
         role: 'WORKER',
         isActive: true,
+        tokenVersion: 0,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
       });

@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { Session, CreateSessionInput } from '../../src/sessions/session.types.js';
+import type {
+  Session,
+  CreateSessionInput,
+} from '../../src/sessions/session.types.js';
 import type { SessionsRepository } from '../../src/sessions/sessions.repository.js';
 import type {
   CreateUserInput,
   User,
   UserWithPassword,
 } from '../../src/users/user.types.js';
-import { toPublicUser } from '../../src/users/user.types.js';
 import type { UsersRepository } from '../../src/users/users.repository.js';
 
 /**
@@ -28,8 +30,20 @@ export class InMemoryUsersRepository implements UsersRepository {
     }
   }
 
+  setTokenVersion(id: string, tokenVersion: number): void {
+    const user = this.records.get(id);
+    if (user) {
+      user.tokenVersion = tokenVersion;
+      user.updatedAt = new Date();
+    }
+  }
+
   seed(
-    input: CreateUserInput & { id?: string; isActive?: boolean },
+    input: CreateUserInput & {
+      id?: string;
+      isActive?: boolean;
+      tokenVersion?: number;
+    },
   ): UserWithPassword {
     const now = new Date();
     const user: UserWithPassword = {
@@ -38,6 +52,7 @@ export class InMemoryUsersRepository implements UsersRepository {
       fullName: input.fullName,
       role: input.role,
       isActive: input.isActive ?? true,
+      tokenVersion: input.tokenVersion ?? 0,
       createdAt: now,
       updatedAt: now,
       passwordHash: input.passwordHash,
@@ -61,11 +76,11 @@ export class InMemoryUsersRepository implements UsersRepository {
     if (!user) {
       return null;
     }
-    return toPublicUser(user);
+    return { ...user };
   }
 
   async create(input: CreateUserInput): Promise<User> {
-    return toPublicUser(this.seed(input));
+    return { ...this.seed(input) };
   }
 }
 

@@ -1,14 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { DatabaseModule } from '../database/database.module.js';
-import {
-  SESSIONS_REPOSITORY,
-} from '../sessions/sessions.repository.js';
-import { PostgresSessionsRepository } from '../sessions/postgres-sessions.repository.js';
+import { PrismaModule } from '../prisma/prisma.module.js';
+import { PrismaSessionsRepository } from '../sessions/prisma-sessions.repository.js';
+import { SESSIONS_REPOSITORY } from '../sessions/sessions.repository.js';
+import { PrismaUsersRepository } from '../users/prisma-users.repository.js';
 import { USERS_REPOSITORY } from '../users/users.repository.js';
-import { PostgresUsersRepository } from '../users/postgres-users.repository.js';
 import { AuthController } from './auth.controller.js';
+import { AuthCookies } from './auth.cookies.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { PasswordHasher } from './password-hasher.js';
@@ -18,7 +17,7 @@ const JWT_AUDIENCE = 'raf-consult-portal';
 
 @Module({
   imports: [
-    DatabaseModule,
+    PrismaModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -40,10 +39,11 @@ const JWT_AUDIENCE = 'raf-consult-portal';
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthCookies,
     PasswordHasher,
     JwtAuthGuard,
-    { provide: USERS_REPOSITORY, useClass: PostgresUsersRepository },
-    { provide: SESSIONS_REPOSITORY, useClass: PostgresSessionsRepository },
+    { provide: USERS_REPOSITORY, useClass: PrismaUsersRepository },
+    { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },
   ],
   exports: [AuthService, JwtAuthGuard],
 })

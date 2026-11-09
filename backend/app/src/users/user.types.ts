@@ -13,6 +13,8 @@ export interface User {
   fullName: string;
   role: UserRole;
   isActive: boolean;
+  /** Monotonic global-invalidation counter; compared with the JWT `tv` claim. */
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }

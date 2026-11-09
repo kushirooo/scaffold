@@ -11,6 +11,7 @@ function mapUser(record: PrismaUserRecord): User {
     fullName: record.fullName,
     role: record.role,
     isActive: record.isActive,
+    tokenVersion: record.tokenVersion,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

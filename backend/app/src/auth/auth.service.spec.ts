@@ -2,10 +2,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service.js';
-import type {
-  AccessTokenPayload,
-  AuthenticatedUser,
-} from './auth.types.js';
+import type { AccessTokenPayload } from './auth.types.js';
 import { PasswordHasher } from './password-hasher.js';
 import {
   InMemorySessionsRepository,
@@ -21,7 +18,12 @@ describe('AuthService', () => {
   let sessions: InMemorySessionsRepository;
   let service: AuthService;
   let jwt: JwtService;
-  let user: AuthenticatedUser;
+  let user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: 'PROJECT_MANAGER';
+  };
 
   beforeEach(async () => {
     const hasher = new PasswordHasher();
@@ -50,20 +52,30 @@ describe('AuthService', () => {
     );
   });
 
-  it('issues a JWT that carries the user and session ids', async () => {
+  async function login() {
     const result = await service.login(user.email, PASSWORD);
+    const payload = await jwt.verifyAsync<AccessTokenPayload>(result.token);
 
-    const payload = await jwt.verifyAsync<AccessTokenPayload>(
-      result.accessToken,
-    );
+    return { result, payload };
+  }
+
+  it('issues a JWT with sub/sid/tv and returns no token in the body', async () => {
+    const { result, payload } = await login();
+
     expect(payload).toMatchObject({
       sub: user.id,
       role: user.role,
       email: user.email,
+      tv: 0,
     });
     expect(payload.sid).toEqual(expect.any(String));
-    expect(result.redirectTo).toBe('/dashboard/projects');
-    expect(result.expiresIn).toBe(TTL_SECONDS);
+    expect(result.response).toEqual({
+      user: expect.objectContaining({ id: user.id, role: user.role }),
+      redirectTo: '/dashboard',
+      expiresIn: TTL_SECONDS,
+    });
+    expect(result.response).not.toHaveProperty('token');
+    expect(result.response).not.toHaveProperty('accessToken');
   });
 
   it('returns the generic error for a wrong password or unknown account', async () => {
@@ -76,10 +88,7 @@ describe('AuthService', () => {
   });
 
   it('resolves a live session to the current user', async () => {
-    const result = await service.login(user.email, PASSWORD);
-    const payload = await jwt.verifyAsync<AccessTokenPayload>(
-      result.accessToken,
-    );
+    const { payload } = await login();
 
     await expect(service.resolveSession(payload)).resolves.toEqual({
       sessionId: payload.sid,
@@ -88,10 +97,7 @@ describe('AuthService', () => {
   });
 
   it('stops resolving a session after logout', async () => {
-    const result = await service.login(user.email, PASSWORD);
-    const payload = await jwt.verifyAsync<AccessTokenPayload>(
-      result.accessToken,
-    );
+    const { payload } = await login();
 
     await service.logout(payload.sid);
 
@@ -101,11 +107,17 @@ describe('AuthService', () => {
   });
 
   it('stops resolving a session when the account is deactivated', async () => {
-    const result = await service.login(user.email, PASSWORD);
-    const payload = await jwt.verifyAsync<AccessTokenPayload>(
-      result.accessToken,
-    );
+    const { payload } = await login();
     users.setActive(user.id, false);
+
+    await expect(service.resolveSession(payload)).rejects.toThrow(
+      'Session is no longer valid',
+    );
+  });
+
+  it('stops resolving a session when tokenVersion has moved on', async () => {
+    const { payload } = await login();
+    users.setTokenVersion(user.id, payload.tv + 1);
 
     await expect(service.resolveSession(payload)).rejects.toThrow(
       'Session is no longer valid',

@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  Inject,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -20,7 +16,7 @@ import {
   INVALID_SESSION_MESSAGE,
   type AccessTokenPayload,
   type AuthenticatedUser,
-  type LoginResponse,
+  type LoginResult,
 } from './auth.types.js';
 import { PasswordHasher } from './password-hasher.js';
 import { dashboardPathForRole } from './role-dashboard.js';
@@ -56,11 +52,14 @@ export class AuthService {
   }
 
   /**
-   * AC1: valid credentials return a token and the role-specific landing path.
+   * AC1: valid credentials return the user, the landing path and the lifetime.
+   * The signed token is returned separately so the controller can place it in
+   * the httpOnly cookie; it never enters the response body.
+   *
    * AC2: every failure returns the same generic 401 so the response never
    * reveals whether the email or the password was wrong.
    */
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(email: string, password: string): Promise<LoginResult> {
     const user = await this.users.findByEmail(email);
 
     if (!user) {
@@ -87,20 +86,22 @@ export class AuthService {
     const payload: AccessTokenPayload = {
       sub: user.id,
       sid: session.id,
+      tv: user.tokenVersion,
       role: user.role,
       email: user.email,
     };
 
-    const accessToken = await this.jwt.signAsync(payload, {
+    const token = await this.jwt.signAsync(payload, {
       expiresIn: this.ttlSeconds,
     });
 
     return {
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: this.ttlSeconds,
-      user: toAuthenticatedUser(user),
-      redirectTo: dashboardPathForRole(user.role),
+      token,
+      response: {
+        user: toAuthenticatedUser(user),
+        redirectTo: dashboardPathForRole(user.role),
+        expiresIn: this.ttlSeconds,
+      },
     };
   }
 
@@ -113,12 +114,11 @@ export class AuthService {
   }
 
   /**
-   * AC4 support: resolve the JWT's session claim against the database on every
-   * protected request, so revocation and deactivation take effect immediately.
+   * AC4 support: resolve the JWT's session and user claims against the
+   * database on every protected request, so revocation, deactivation, role
+   * changes and global `tokenVersion` invalidation take effect immediately.
    */
-  async resolveSession(
-    payload: AccessTokenPayload,
-  ): Promise<SessionPrincipal> {
+  async resolveSession(payload: AccessTokenPayload): Promise<SessionPrincipal> {
     const session = await this.sessions.findActiveById(payload.sid);
 
     if (!session || session.userId !== payload.sub) {
@@ -126,7 +126,12 @@ export class AuthService {
     }
 
     const user = await this.users.findById(payload.sub);
-    if (!user || !user.isActive || user.role !== payload.role) {
+    if (
+      !user ||
+      !user.isActive ||
+      user.role !== payload.role ||
+      user.tokenVersion !== payload.tv
+    ) {
       throw new UnauthorizedException(INVALID_SESSION_MESSAGE);
     }
 

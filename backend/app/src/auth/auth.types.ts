@@ -1,6 +1,9 @@
 import type { Request } from 'express';
 import type { UserRole } from '../users/user.types.js';
 
+/** httpOnly cookie that carries the signed access token. */
+export const ACCESS_TOKEN_COOKIE = 'mars_at';
+
 export interface AuthenticatedUser {
   id: string;
   email: string;
@@ -13,16 +16,23 @@ export interface AccessTokenPayload {
   sub: string;
   /** Session id. Logout revokes this row, which invalidates the token. */
   sid: string;
+  /** Token version. Must equal `users.token_version` on every request. */
+  tv: number;
   role: UserRole;
   email: string;
 }
 
+/** Login response body. The JWT never appears here; it only travels in Set-Cookie. */
 export interface LoginResponse {
-  accessToken: string;
-  tokenType: 'Bearer';
-  expiresIn: number;
   user: AuthenticatedUser;
   redirectTo: string;
+  expiresIn: number;
+}
+
+/** Internal service result: `token` is written to the cookie by the controller. */
+export interface LoginResult {
+  token: string;
+  response: LoginResponse;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -33,3 +43,5 @@ export interface AuthenticatedRequest extends Request {
 export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 export const INVALID_SESSION_MESSAGE = 'Session is no longer valid';
 export const MISSING_TOKEN_MESSAGE = 'Authentication required';
+export const INVALID_TOKEN_MESSAGE = 'Invalid or expired access token';
+export const MISSING_CSRF_MESSAGE = 'Missing or invalid CSRF header';

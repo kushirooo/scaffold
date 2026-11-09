@@ -7,25 +7,23 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from '../auth.service.js';
 import {
+  ACCESS_TOKEN_COOKIE,
+  INVALID_TOKEN_MESSAGE,
   MISSING_TOKEN_MESSAGE,
   type AccessTokenPayload,
   type AuthenticatedRequest,
 } from '../auth.types.js';
 import { USER_ROLES } from '../../users/user.types.js';
 
-const INVALID_TOKEN_MESSAGE = 'Invalid or expired access token';
+/**
+ * Reads the signed access token from the httpOnly `mars_at` cookie. There is
+ * deliberately no header-token fallback: one transport, one trust model.
+ */
+function extractAccessToken(request: AuthenticatedRequest): string | null {
+  const cookies: Record<string, unknown> | undefined = request.cookies;
+  const token = cookies?.[ACCESS_TOKEN_COOKIE];
 
-function extractBearerToken(authorization: string | undefined): string | null {
-  if (!authorization) {
-    return null;
-  }
-
-  const [scheme, token] = authorization.split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token) {
-    return null;
-  }
-
-  return token;
+  return typeof token === 'string' && token.length > 0 ? token : null;
 }
 
 function isAccessTokenPayload(value: unknown): value is AccessTokenPayload {
@@ -37,6 +35,8 @@ function isAccessTokenPayload(value: unknown): value is AccessTokenPayload {
   return (
     typeof payload.sub === 'string' &&
     typeof payload.sid === 'string' &&
+    typeof payload.tv === 'number' &&
+    Number.isInteger(payload.tv) &&
     typeof payload.email === 'string' &&
     typeof payload.role === 'string' &&
     (USER_ROLES as readonly string[]).includes(payload.role)
@@ -52,7 +52,7 @@ export class JwtAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const token = extractBearerToken(request.headers.authorization);
+    const token = extractAccessToken(request);
 
     if (!token) {
       throw new UnauthorizedException(MISSING_TOKEN_MESSAGE);

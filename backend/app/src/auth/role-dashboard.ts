@@ -1,20 +1,12 @@
 import type { UserRole } from '../users/user.types.js';
 
 /**
- * Landing route per role. The frontend owns these pages; the API returns the
- * target so the login screen never has to branch on roles.
- *
- * These paths follow the app-shell navigation in DESIGN.md (Dashboard,
- * Projects, Tasks, Reports) and are part of the US01 API contract. Confirm
- * them with the frontend owner before the integration demo.
+ * D1: in Sprint 1 the portal has a single dashboard route, so every role is
+ * sent to `/dashboard`. The role is still returned in the login response so
+ * the frontend can render role-specific content later.
  */
-export const ROLE_DASHBOARD_PATHS: Record<UserRole, string> = {
-  ADMIN: '/dashboard',
-  PROJECT_MANAGER: '/dashboard/projects',
-  WORKER: '/dashboard/tasks',
-  VIEWER: '/dashboard/reports',
-};
+export const DASHBOARD_PATH = '/dashboard';
 
-export function dashboardPathForRole(role: UserRole): string {
-  return ROLE_DASHBOARD_PATHS[role];
+export function dashboardPathForRole(_role: UserRole): string {
+  return DASHBOARD_PATH;
 }
