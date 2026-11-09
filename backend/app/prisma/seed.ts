@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PasswordHasher } from '../src/auth/password-hasher.js';
 import type { UserRole } from '../src/users/user.types.js';
@@ -101,48 +103,58 @@ async function prepareDemoUsers(password: string): Promise<PreparedDemoUser[]> {
   return prepared;
 }
 
-async function seedDemoUsers(): Promise<void> {
+/**
+ * Upsert the six demo accounts into the database behind `prisma`.
+ *
+ * Exported so the real-PostgreSQL seed suite can call it directly; the CLI
+ * entrypoint below keeps `npm run db:seed` working.
+ */
+export async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
   const password = requireSeedPassword();
   const demoUsers = await prepareDemoUsers(password);
+
+  await prisma.$transaction(async (tx) => {
+    for (const demoUser of demoUsers) {
+      const user = await tx.user.upsert({
+        where: { email: demoUser.email },
+        update: {
+          fullName: demoUser.fullName,
+          role: demoUser.role,
+          isActive: demoUser.isActive,
+        },
+        create: {
+          email: demoUser.email,
+          fullName: demoUser.fullName,
+          role: demoUser.role,
+          isActive: demoUser.isActive,
+        },
+      });
+
+      const passwordHash = demoUser.passwordHash;
+      if (passwordHash) {
+        const passwordUpdatedAt = new Date();
+        await tx.credential.upsert({
+          where: { userId: user.id },
+          update: { passwordHash, passwordUpdatedAt },
+          create: {
+            userId: user.id,
+            passwordHash,
+            passwordUpdatedAt,
+          },
+        });
+      } else {
+        // Invited account: keep the row but guarantee no password is set.
+        await tx.credential.deleteMany({ where: { userId: user.id } });
+      }
+    }
+  });
+}
+
+async function main(): Promise<void> {
   const prisma = new PrismaClient();
 
   try {
-    await prisma.$transaction(async (tx) => {
-      for (const demoUser of demoUsers) {
-        const user = await tx.user.upsert({
-          where: { email: demoUser.email },
-          update: {
-            fullName: demoUser.fullName,
-            role: demoUser.role,
-            isActive: demoUser.isActive,
-          },
-          create: {
-            email: demoUser.email,
-            fullName: demoUser.fullName,
-            role: demoUser.role,
-            isActive: demoUser.isActive,
-          },
-        });
-
-        const passwordHash = demoUser.passwordHash;
-        if (passwordHash) {
-          const passwordUpdatedAt = new Date();
-          await tx.credential.upsert({
-            where: { userId: user.id },
-            update: { passwordHash, passwordUpdatedAt },
-            create: {
-              userId: user.id,
-              passwordHash,
-              passwordUpdatedAt,
-            },
-          });
-        } else {
-          // Invited account: keep the row but guarantee no password is set.
-          await tx.credential.deleteMany({ where: { userId: user.id } });
-        }
-      }
-    });
-
+    await seedDemoUsers(prisma);
     console.log(
       `Seeded ${DEMO_USERS.length} demo users (password from SEED_PASSWORD).`,
     );
@@ -151,7 +163,17 @@ async function seedDemoUsers(): Promise<void> {
   }
 }
 
-seedDemoUsers().catch((error: unknown) => {
-  console.error('Seeding failed:', error);
-  process.exitCode = 1;
-});
+function isCliEntrypoint(): boolean {
+  const entrypoint = process.argv[1];
+  return (
+    entrypoint !== undefined &&
+    fileURLToPath(import.meta.url) === resolve(entrypoint)
+  );
+}
+
+if (isCliEntrypoint()) {
+  main().catch((error: unknown) => {
+    console.error('Seeding failed:', error);
+    process.exitCode = 1;
+  });
+}
