@@ -1,19 +1,36 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
+import { Pool } from 'pg';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { AuthModule } from './auth/auth.module.js';
+import { validateEnvironment } from './config/env.validation.js';
+import { DatabaseModule } from './database/database.module.js';
 
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+export const { ObserveModule, ObserveInstrument } = createObserveModule({
+  // Observe proxies provider instances; pg-pool calls `this.Promise` as a
+  // constructor, which a proxy wrapper cannot satisfy. Skipping the pool
+  // instance keeps the prototype-level query spans without breaking queries.
+  skipInstrumentation: (instance: unknown) => instance instanceof Pool,
+});
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      validate: validateEnvironment,
+    }),
+    DatabaseModule,
+    AuthModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
     ObserveModule.forRoot({
       appKey: process.env.OBSERVE_APP_KEY ?? '',
       appSecret: process.env.OBSERVE_APP_SECRET ?? '',
-      runtimeMetrics: !Boolean(process.versions?.['webcontainer']),
-      serviceId: 'nest-typescript-starter',
+      runtimeMetrics: !process.versions?.['webcontainer'],
+      serviceId: 'raf-consult-pms',
     }),
   ],
   controllers: [AppController],

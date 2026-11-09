@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+coverage/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Generated clients
+**/src/generated/
+**/.prisma/
+
+# Local caches
+.npm-cache/
+
+# Local database cluster (if one is created inside the workspace)
+.pgdata/
