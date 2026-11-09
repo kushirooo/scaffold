@@ -14,6 +14,8 @@
 
 **What this PASS means:** the T1 deliverables are present, wired, and reproduced from a clean command run. **What it does not mean:** the migration was not applied, the seed was not executed, and the Prisma repositories were not exercised against a real PostgreSQL database. Those are deferred to CI/staging (§6) and are not claimed.
 
+**Follow-up (T7, 9 Nov 2026):** the T4 review fixes F1/F2/F4 were re-verified after T6 in [`verification-prisma-foundation-fixes.md`](verification-prisma-foundation-fixes.md) — verdict **PASS**, F1 mutation-tested 8/8, F2 generated-client boundaries closed (resolves OBS-4), F4 seed hashing moved before the transaction; DB checks remain `DEFERRED (no DB)`.
+
 Method: commands were run directly from `scaffold/backend/app` after the backend agent stopped installing/generating. No `npm install`, no source edits, no Git writes, no database connection. Raw outputs are in [`docs/qa/evidence/2026-11-09-t5/`](evidence/2026-11-09-t5/).
 
 ---

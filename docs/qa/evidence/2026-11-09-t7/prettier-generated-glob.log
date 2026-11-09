@@ -1,0 +1,4 @@
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --check src/generated/**/*.ts
+Checking formatting...
+All matched files use Prettier code style!
