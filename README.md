@@ -40,6 +40,10 @@ psql "postgresql://postgres:postgres@127.0.0.1:5432/raf_pms" -c "create database
 
 Both test suites migrate and seed their own database; the e2e guard refuses to run against `raf_pms`. CI mirrors this with a PostgreSQL 18 service container (`.github/workflows/ci.yml`).
 
+## Manual API checks (Postman)
+
+Import [docs/http/us01.postman_collection.json](docs/http/us01.postman_collection.json), set the collection variable `password` to the value of `SEED_PASSWORD`, and run the requests top to bottom. Postman stores the httpOnly cookie automatically; the collection tests the cookie flags, CSRF 403, CORS preflight, logout revocation and the old-cookie 401.
+
 ## Repository layout
 
 ```
