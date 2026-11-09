@@ -26,8 +26,15 @@ Local PostgreSQL 18 is exposed on `127.0.0.1:5432` (database `raf_pms`). The Com
 ```bash
 npm test          # unit
 npm run test:e2e  # API integration (in-memory repositories)
+npm run test:db   # real PostgreSQL integration (raf_pms_test)
 npm run lint
 npm run build
+```
+
+`npm run test:db` expects a separate `raf_pms_test` database. Create it once:
+
+```bash
+psql "postgresql://postgres:postgres@127.0.0.1:5432/raf_pms" -c "create database raf_pms_test;"
 ```
 
 ## Repository layout
