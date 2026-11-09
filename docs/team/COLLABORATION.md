@@ -85,7 +85,7 @@ The Lead owns Git because all agents share one checkout. Parallel `git add`, bra
 |---|---|
 | `wip/us01-bearer-baseline` | Tagged `pre-reconcile` (local) |
 | `feat/prisma-foundation` | Checked out, based on the WIP baseline |
-| Remote | GitHub authenticated; feature branch push/PR pending |
+| Remote | Draft [PR #1](https://github.com/kushirooo/scaffold/pull/1) on `feat/prisma-foundation`; CI `api` + `web` green |
 | `main` | Untouched at `895d6f3` |
 
 > **History note:** on 9 Nov the local feature branch was rewritten to the GitHub
