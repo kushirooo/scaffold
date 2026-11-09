@@ -1,18 +1,19 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
-import { Pool } from 'pg';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { validateEnvironment } from './config/env.validation.js';
-import { DatabaseModule } from './database/database.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
+import { PrismaService } from './prisma/prisma.service.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule({
-  // Observe proxies provider instances; pg-pool calls `this.Promise` as a
-  // constructor, which a proxy wrapper cannot satisfy. Skipping the pool
-  // instance keeps the prototype-level query spans without breaking queries.
-  skipInstrumentation: (instance: unknown) => instance instanceof Pool,
+  // Observe proxies provider instances; the Prisma client keeps internal
+  // private state that a proxy wrapper cannot satisfy. Skipping the client
+  // keeps prototype-level instrumentation everywhere else without breaking
+  // queries.
+  skipInstrumentation: (instance: unknown) => instance instanceof PrismaService,
 });
 
 @Module({
@@ -22,7 +23,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
       cache: true,
       validate: validateEnvironment,
     }),
-    DatabaseModule,
+    PrismaModule,
     AuthModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com

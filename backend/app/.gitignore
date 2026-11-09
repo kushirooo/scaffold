@@ -12,6 +12,9 @@
 # dependencies
 /node_modules
 
+# Prisma generated client (recreated by `npm install` / `npm run db:generate`)
+/src/generated/
+
 # IDEs and editors
 /.idea
 .project
