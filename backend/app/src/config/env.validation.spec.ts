@@ -15,6 +15,10 @@ function productionEnv(
     COOKIE_SECURE: 'true',
     COOKIE_SAMESITE: 'none',
     FRONTEND_URL: 'https://mars.rafconsult.example',
+    EMAIL_TRANSPORT: 'resend',
+    RESEND_API_KEY: 're_test_key',
+    MAIL_FROM: 'RAF CONSULT MARS <no-reply@rafconsult.example>',
+    ADMIN_ALERT_EMAIL: 'admin@rafconsult.example',
     ...overrides,
   };
 }
@@ -112,5 +116,87 @@ describe('validateEnvironment', () => {
         productionEnv({ FRONTEND_URL: 'http://mars.rafconsult.example' }),
       ),
     ).toThrow('FRONTEND_URL must use HTTPS outside development');
+  });
+
+  it('defaults email delivery to the memory transport outside production', () => {
+    const env = validateEnvironment({});
+
+    expect(env.EMAIL_TRANSPORT).toBe('memory');
+    expect(env.MAIL_FROM).toContain('no-reply@rafconsult.test');
+    expect(env.ADMIN_ALERT_EMAILS).toEqual(['admin@rafconsult.test']);
+    expect(env.INVITE_TTL_SECONDS).toBe(86_400);
+    expect(env.SMTP_HOST).toBeUndefined();
+    expect(env.SMTP_PORT).toBeUndefined();
+    expect(env.RESEND_API_KEY).toBeUndefined();
+  });
+
+  it('requires an explicit email transport in production', () => {
+    expect(() =>
+      validateEnvironment(productionEnv({ EMAIL_TRANSPORT: undefined })),
+    ).toThrow('EMAIL_TRANSPORT is required in production');
+  });
+
+  it('rejects the memory transport in production', () => {
+    expect(() =>
+      validateEnvironment(productionEnv({ EMAIL_TRANSPORT: 'memory' })),
+    ).toThrow('EMAIL_TRANSPORT=memory is not allowed in production');
+  });
+
+  it('requires resend credentials when resend is selected', () => {
+    expect(() =>
+      validateEnvironment(productionEnv({ RESEND_API_KEY: '' })),
+    ).toThrow('RESEND_API_KEY is required when EMAIL_TRANSPORT=resend');
+  });
+
+  it('requires smtp credentials when smtp is selected', () => {
+    expect(() => validateEnvironment({ EMAIL_TRANSPORT: 'smtp' })).toThrow(
+      'SMTP_HOST is required when EMAIL_TRANSPORT=smtp',
+    );
+
+    expect(() =>
+      validateEnvironment({
+        EMAIL_TRANSPORT: 'smtp',
+        SMTP_HOST: 'sandbox.smtp.mailtrap.io',
+        SMTP_USER: 'mailtrap-user',
+      }),
+    ).toThrow('SMTP_PASS is required when EMAIL_TRANSPORT=smtp');
+  });
+
+  it('accepts smtp with credentials and defaults the port to 587', () => {
+    const env = validateEnvironment({
+      EMAIL_TRANSPORT: 'smtp',
+      SMTP_HOST: 'sandbox.smtp.mailtrap.io',
+      SMTP_USER: 'mailtrap-user',
+      SMTP_PASS: 'mailtrap-pass',
+    });
+
+    expect(env.EMAIL_TRANSPORT).toBe('smtp');
+    expect(env.SMTP_PORT).toBe(587);
+  });
+
+  it('rejects an unknown email transport', () => {
+    expect(() =>
+      validateEnvironment({ EMAIL_TRANSPORT: 'carrier-pigeon' }),
+    ).toThrow('EMAIL_TRANSPORT must be one of');
+  });
+
+  it('rejects a non-positive invite TTL', () => {
+    expect(() => validateEnvironment({ INVITE_TTL_SECONDS: '0' })).toThrow(
+      'INVITE_TTL_SECONDS must be a positive integer',
+    );
+  });
+
+  it('parses a comma-separated admin alert list', () => {
+    const env = validateEnvironment({
+      ADMIN_ALERT_EMAIL: 'ops@rafconsult.test, admin@rafconsult.test',
+    });
+
+    expect(env.ADMIN_ALERT_EMAILS).toEqual([
+      'ops@rafconsult.test',
+      'admin@rafconsult.test',
+    ]);
+    expect(env.ADMIN_ALERT_EMAIL).toBe(
+      'ops@rafconsult.test,admin@rafconsult.test',
+    );
   });
 });
