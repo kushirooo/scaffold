@@ -1,0 +1,6 @@
+ M backend/app/.env.example
+ M backend/app/package.json
+ M backend/app/prisma/seed.ts
+?? backend/app/test/db/
+?? backend/app/vitest.config.db.ts
+?? docs/qa/evidence/2026-11-09-t11/

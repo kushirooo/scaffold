@@ -1,0 +1,58 @@
+=== MUTATION TESTING — throwaway copy (original source never edited) ===
+original source digest before: 643b7762d30ba25b6b02692d573336e8fdfca9cc94fcba18915491c20f6beff3  -
+baseline (unmutated) in copy:
+  exit=0 | Tests  14 passed (14)
+
+--- MUTATION: users: no email normalisation (where.email raw)
+    file: backend/app/src/users/prisma-users.repository.ts | sed: s#where: { email: normaliseEmail(email) },#where: { email },#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  1 failed | 8 passed (9)
+    CAUGHT: × lowercases and trims the email before querying 6ms
+
+--- MUTATION: users: drop include.credential
+    file: backend/app/src/users/prisma-users.repository.ts | sed: /include: { credential: true },/d
+    post-mutation marker count: 0 (expected 0) | test exit: 1
+    Tests  2 failed | 7 passed (9)
+    CAUGHT: × queries by email with the credential relation and maps the result 7ms
+    CAUGHT: × lowercases and trims the email before querying 1ms
+
+--- MUTATION: users: drop null-passwordHash guard
+    file: backend/app/src/users/prisma-users.repository.ts | sed: s#if (!record || !passwordHash) {#if (!record) {#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  2 failed | 7 passed (9)
+    CAUGHT: × returns null when the user has no credential row 3ms
+    CAUGHT: × returns null when the credential has no password hash (invited account) 1ms
+
+--- MUTATION: users: findById returns raw record (no mapping)
+    file: backend/app/src/users/prisma-users.repository.ts | sed: s#return record ? mapUser(record) : null;#return (record as unknown as User) ?? null;#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  1 failed | 8 passed (9)
+    CAUGHT: × queries by id and maps the record to the domain type 3ms
+
+--- MUTATION: users: create without nested credential
+    file: backend/app/src/users/prisma-users.repository.ts | sed: s#credential: {#credentialX: {#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  1 failed | 8 passed (9)
+    CAUGHT: × creates the credential in a nested write and maps the result 3ms
+
+--- MUTATION: sessions: revokedAt filter inverted
+    file: backend/app/src/sessions/prisma-sessions.repository.ts | sed: s#revokedAt: null,#revokedAt: { not: null },#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  1 failed | 4 passed (5)
+    CAUGHT: × queries only unrevoked, unexpired rows and maps the result 4ms
+
+--- MUTATION: sessions: expiresAt gt -> lt
+    file: backend/app/src/sessions/prisma-sessions.repository.ts | sed: s#expiresAt: { gt: new Date() },#expiresAt: { lt: new Date() },#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  1 failed | 4 passed (5)
+    CAUGHT: × queries only unrevoked, unexpired rows and maps the result 4ms
+
+--- MUTATION: sessions: revoke return inverted
+    file: backend/app/src/sessions/prisma-sessions.repository.ts | sed: s#return result.count > 0;#return result.count === 0;#
+    post-mutation marker count: 1 (expected 1) | test exit: 1
+    Tests  2 failed | 3 passed (5)
+    CAUGHT: × returns true when a live row was updated 4ms
+    CAUGHT: × returns false when the row is already revoked or missing 1ms
+
+original source digest after:  643b7762d30ba25b6b02692d573336e8fdfca9cc94fcba18915491c20f6beff3  -
+ORIGINAL SOURCE UNCHANGED: yes

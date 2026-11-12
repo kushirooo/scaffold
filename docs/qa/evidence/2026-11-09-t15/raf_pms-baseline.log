@@ -1,0 +1,11 @@
+=== raf_pms baseline BEFORE T15 e2e ===
+users=6
+sessions=53
+credentials=5
+=== databases present ===
+postgres
+raf_pms
+raf_pms_e2e
+raf_pms_test
+=== raf_pms_e2e seed state (users) ===
+e2e_users=6

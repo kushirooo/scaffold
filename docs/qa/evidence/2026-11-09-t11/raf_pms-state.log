@@ -1,0 +1,32 @@
+=== raf_pms: users count ===
+6
+
+=== raf_pms: six users (email | role | is_active | has_password | token_version) ===
+email | role | is_active | has_password | token_version
+admin@rafconsult.test | ADMIN | t | t | 0
+inactive@rafconsult.test | WORKER | f | t | 0
+invited@rafconsult.test | WORKER | t | f | 0
+pm@rafconsult.test | PROJECT_MANAGER | t | t | 0
+viewer@rafconsult.test | VIEWER | t | t | 0
+worker@rafconsult.test | WORKER | t | t | 0
+(6 rows)
+
+=== raf_pms: credentials count ===
+5
+
+=== schema invariants ===
+column_name | data_type | is_nullable | column_default
+is_active | boolean | NO | true
+token_version | integer | NO | 0
+(2 rows)
+t
+0
+typname | enumlabel
+ResetTokenPurpose | INVITE
+ResetTokenPurpose | RESET
+UserRole | ADMIN
+UserRole | PROJECT_MANAGER
+UserRole | WORKER
+UserRole | VIEWER
+(6 rows)
+1

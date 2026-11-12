@@ -1,0 +1,84 @@
+=== F1: new spec coverage map (static) ===
+users: 9 tests
+  - queries by email with the credential relation and maps the result
+  - lowercases and trims the email before querying
+  - returns null when the user does not exist
+  - returns null when the user has no credential row
+  - returns null when the credential has no password hash (invited account)
+  - queries by id and maps the record to the domain type
+  - returns null when the user does not exist
+  - creates the credential in a nested write and maps the result
+  - honours an explicit isActive flag
+sessions: 5 tests
+  - inserts the supplied id, user and expiry and maps the result
+  - queries only unrevoked, unexpired rows and maps the result
+  - returns null when no unrevoked, unexpired row matches
+  - returns true when a live row was updated
+  - returns false when the row is already revoked or missing
+users spec asserts query shapes: True
+sessions spec asserts query shapes: True
+specs import real PrismaClient: False
+specs use any/@ts-ignore: False
+
+=== F2: coverage artefacts exclude generated/dist ===
+coverage-final.json entries mentioning src/generated: 0
+coverage-final.json entries mentioning dist/: 0
+prettierignore:
+  # Generated Prisma client (recreated by `prisma generate`)
+  src/generated/
+  
+  # Build output
+  dist/
+  
+  # Test coverage output
+  coverage/
+
+=== F4: seed hashing order (static assertions) ===
+prepareDemoUsers() called before $transaction: True
+hasher.hash located inside prepareDemoUsers (before transaction): True
+hasher.hash inside interactive transaction callback: False
+hasPassword account count (hashes computed): 5
+transaction wraps all DB writes (upsert/credential): True
+PrismaClient instantiated after hashing: True
+
+=== No pg reintroduced / shims untouched ===
+pg refs in src/test/prisma: 0
+package.json: no pg/@types/pg
+-rw------- 1 anoshizuku anoshizuku 361 12:14:30 src/database/database.module.ts
+-rw------- 1 anoshizuku anoshizuku 450 12:14:30 src/sessions/postgres-sessions.repository.ts
+-rw------- 1 anoshizuku anoshizuku 435 12:14:30 src/users/postgres-users.repository.ts
+
+=== T6 delta (files modified after T5 verification ~12:20, excluding generated) ===
+prisma/seed.ts
+src/sessions/prisma-sessions.repository.spec.ts
+src/users/prisma-users.repository.spec.ts
+src/users/prisma-users.repository.ts
+config delta:
+-rw-r--r-- 1 anoshizuku anoshizuku 2117 12:15:03 package.json
+-rw------- 1 anoshizuku anoshizuku  130 12:23:58 .prettierignore
+-rw-r--r-- 1 anoshizuku anoshizuku  558 12:24:02 vitest.config.e2e.ts
+-rw-r--r-- 1 anoshizuku anoshizuku  642 12:24:02 vitest.config.ts
+
+=== git status --short ===
+ M .env.example
+ M .gitignore
+ M package-lock.json
+ M package.json
+ M src/app.module.ts
+ M src/database/database.module.ts
+ D src/database/migrate.ts
+ D src/database/migrations.ts
+ D src/database/seed.ts
+ M src/sessions/postgres-sessions.repository.ts
+ M src/users/postgres-users.repository.ts
+ M tsconfig.build.json
+ M vitest.config.e2e.ts
+ M vitest.config.ts
+?? .prettierignore
+?? prisma/
+?? src/prisma/
+?? src/sessions/prisma-sessions.repository.spec.ts
+?? src/sessions/prisma-sessions.repository.ts
+?? src/users/prisma-users.repository.spec.ts
+?? src/users/prisma-users.repository.ts
+?? ../../docs/qa/evidence/2026-11-09-t7/

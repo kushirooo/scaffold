@@ -1,0 +1,22 @@
+=== server stopped? ===
+port 4000 closed
+HTTP root: 000no-response
+
+=== raf_pms final state after e2e + smoke ===
+users=6
+credentials=5
+sessions=51
+sessions_unrevoked=42
+email | role | is_active | token_version
+admin@rafconsult.test | ADMIN | t | 0
+inactive@rafconsult.test | WORKER | f | 0
+invited@rafconsult.test | WORKER | t | 0
+pm@rafconsult.test | PROJECT_MANAGER | t | 0
+viewer@rafconsult.test | VIEWER | t | 0
+worker@rafconsult.test | WORKER | t | 0
+(6 rows)
+non-demo users: 0
+fixture/example users: 0
+
+=== secrets in T13 evidence logs? ===
+no JWT/seed-password strings in evidence

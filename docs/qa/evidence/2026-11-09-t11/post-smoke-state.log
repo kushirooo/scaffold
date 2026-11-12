@@ -1,0 +1,10 @@
+=== API process stopped? ===
+port 4000 closed
+HTTP root: 000no-response
+
+=== raf_pms after API smoke (users must still be 6) ===
+6
+sessions for pm: unrevoked=0 revoked=2
+
+=== no secrets in T11 evidence logs ===
+no JWT/password strings found in evidence logs

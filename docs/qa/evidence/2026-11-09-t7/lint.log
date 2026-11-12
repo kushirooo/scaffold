@@ -1,0 +1,4 @@
+npm notice run nest-typescript-starter@1.0.0 lint
+npm notice run oxlint src/ test/ --ignore-pattern="src/generated/**"
+Found 0 warnings and 0 errors.
+Finished in 25ms on 35 files with 96 rules using 16 threads.

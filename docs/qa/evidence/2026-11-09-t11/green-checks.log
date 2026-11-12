@@ -1,0 +1,18 @@
+=== npm run lint ===
+lint exit=0
+Found 0 warnings and 0 errors.
+Finished in 26ms on 42 files with 96 rules using 16 threads.
+
+=== npm test ===
+unit exit=0
+ Test Files  6 passed (6)
+      Tests  25 passed (25)
+
+=== npm run test:e2e ===
+e2e exit=0
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+
+=== npm run build ===
+build exit=0
+-rw-r--r-- 1 anoshizuku anoshizuku 540 Nov  9 13:03 dist/main.js
