@@ -1,0 +1,153 @@
+:root {
+  --navy: #09096f;
+  --navy-deep: #07075f;
+  --page: #f3f6ff;
+  --ink: #111344;
+  --muted: #66708c;
+  --line: #e0e6f2;
+  --font-dm-sans: Arial, Helvetica, sans-serif;
+  --font-lora: Georgia, 'Times New Roman', serif;
+}
+
+
+button:focus-visible, a:focus-visible { outline: 3px solid #75a7ff; outline-offset: 3px; }
+
+.us18-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 82px 1fr;
+  background: var(--page);
+  color: var(--ink);
+}
+.us18-header {
+  display: flex;
+  align-items: center;
+  padding: 10px clamp(18px, 4vw, 48px);
+  border: 1px solid #1688df;
+  background: rgba(255,255,255,.88);
+}
+.us18-logo { width: 64px; height: 56px; object-fit: contain; }
+.us18-content {
+  display: grid;
+  grid-template-columns: minmax(320px, 34.5%) 1fr;
+  min-height: calc(100vh - 70px);
+}
+.us18-side {
+  background: var(--navy);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(28px, 5vw, 64px);
+}
+.us18-side-inner { width: min(100%, 390px); }
+.us18-side-kicker {
+  font-family: var(--font-lora), Georgia, 'Times New Roman', serif;
+  font-size: clamp(30px, 3.3vw, 43px);
+  line-height: 1.06;
+  margin: 0 0 16px;
+  font-weight: 400;
+  letter-spacing: -.7px;
+}
+.us18-side-kicker em { font-style: italic; }
+.us18-side-copy { color: #d0d5ff; font-family: var(--font-dm-sans), Arial, sans-serif; font-size: 14px; line-height: 1.75; }
+.us18-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(28px, 6vw, 88px);
+}
+.us18-card { width: min(100%, 660px); }
+.us18-eyebrow { text-transform: uppercase; letter-spacing: .13em; font-size: 11px; color: #66708c; font-weight: 600; }
+.us18-title {
+  color: var(--navy);
+  font-family: var(--font-lora), Georgia, 'Times New Roman', serif;
+  font-size: clamp(38px, 5vw, 60px);
+  line-height: 1.08;
+  font-weight: 400;
+  letter-spacing: -0.55px;
+  margin: 14px 0 12px;
+}
+.us18-body-copy { color: var(--muted); font-size: 15px; line-height: 1.75; max-width: 560px; }
+.us18-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 13px;
+  padding: 18px 20px;
+  margin-top: 28px;
+}
+.us18-info-icon { flex: 0 0 auto; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #e8f7ee; color: #16834a; }
+.us18-info-icon.failed { background: #fff0ed; color: #c0392b; }
+.us18-info-label { color: #707991; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+.us18-info-value { color: #15183f; font-size: 15px; font-weight: 700; margin-top: 5px; overflow-wrap: anywhere; }
+.us18-note { color: #68728c; font-size: 13px; line-height: 1.6; margin-top: 10px; }
+.us18-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 25px; }
+.us18-button { border: 0; border-radius: 7px; padding: 13px 19px; min-height: 46px; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .15s ease, opacity .15s ease; }
+.us18-button:hover { transform: translateY(-1px); }
+.us18-button-primary { background: var(--navy); color: white; }
+.us18-button-secondary { background: white; color: var(--navy); border: 1px solid #ccd4e5; }
+.us18-button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.us18-demo-tools { border-top: 1px dashed #cfd7e8; margin-top: 34px; padding-top: 18px; }
+.us18-demo-tools p { color: #737d96; font-size: 11px; margin: 0 0 10px; }
+.us18-demo-button { background: transparent; border: 1px solid #cbd4e6; color: #525d78; border-radius: 6px; padding: 8px 10px; margin: 0 8px 8px 0; cursor: pointer; font-size: 12px; }
+.us18-demo-button[aria-pressed="true"] { background: #e7ecfb; border-color: #979fca; color: var(--navy); }
+.us18-footer { color: #8790a7; font-size: 11px; margin-top: 38px; }
+
+@media (max-width: 760px) {
+  .us18-shell { grid-template-rows: 72px 1fr; }
+  .us18-logo { width: 56px; height: 50px; }
+  .us18-content { grid-template-columns: 1fr; }
+  .us18-side { min-height: 215px; padding: 30px 26px; }
+  .us18-side-kicker { font-size: 32px; }
+  .us18-main { padding: 34px 24px 52px; align-items: flex-start; }
+  .us18-title { font-size: 42px; }
+}
+
+/* US19 password recovery - clean layout using the supplied RAF CONSULT logo. */
+.us19-shell { min-height: 100vh; display: grid; grid-template-rows: 82px 1fr; background: var(--page); color: var(--ink); }
+.us19-header { display: flex; align-items: center; padding: 10px clamp(20px, 5vw, 64px); background: #fff; border-bottom: 1px solid var(--line); }
+.us19-brand { display: inline-flex; align-items: center; gap: 13px; color: var(--navy); text-decoration: none; }
+.us19-logo { display: block; width: 63px; height: 56px; object-fit: contain; }
+.us19-brand-name { font-size: 15px; font-weight: 800; letter-spacing: .12em; }
+.us19-main { min-height: calc(100vh - 82px); display: flex; align-items: center; justify-content: center; padding: clamp(24px, 5vw, 64px) 20px; }
+.us19-card { width: min(100%, 520px); padding: clamp(26px, 5vw, 44px); border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 18px 55px rgba(22, 35, 78, .08); }
+.us19-eyebrow { text-transform: uppercase; letter-spacing: .13em; font-size: 10px; color: #66708c; font-weight: 700; }
+.us19-heading-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-top: 27px; border-radius: 50%; background: #e8edff; color: var(--navy); }
+.us19-title { color: var(--navy); font-family: var(--font-lora), Georgia, serif; font-size: clamp(34px, 4.5vw, 48px); line-height: 1.12; font-weight: 400; letter-spacing: -.45px; margin: 17px 0 12px; }
+.us19-description { color: var(--muted); font-size: 14px; line-height: 1.75; }
+.us19-form { display: grid; gap: 10px; margin-top: 25px; }
+.us19-label { color: #313b5c; font-size: 13px; font-weight: 600; margin-top: 6px; }
+.us19-input { width: 100%; min-height: 48px; border: 1px solid #d6deed; border-radius: 8px; background: #fff; color: #172044; padding: 12px 14px; font-size: 14px; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+.us19-input:focus { border-color: #6876c4; box-shadow: 0 0 0 3px rgba(9,9,111,.09); }
+.us19-input::placeholder { color: #9aa3b5; }
+.us19-helper { color: #758099; font-size: 12px; line-height: 1.55; margin: 2px 0 7px; }
+.us19-field-error { color: #b9382d; font-size: 12px; line-height: 1.55; margin: 0 0 4px; }
+.us19-button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 18px; border-radius: 8px; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer; transition: transform .15s ease, background .15s ease, opacity .15s ease; }
+.us19-button:hover { transform: translateY(-1px); }
+.us19-button:disabled { opacity: .6; cursor: wait; transform: none; }
+.us19-button-primary { border: 1px solid var(--navy); background: var(--navy); color: white; }
+.us19-button-primary:hover { background: var(--navy-deep); }
+.us19-button-secondary { border: 1px solid #d3dbea; background: white; color: var(--navy); }
+.us19-status-row { display: flex; align-items: center; gap: 12px; margin-top: 26px; }
+.us19-status-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 50%; background: #e7f6ed; color: #16834a; }
+.us19-status-icon.is-failed { background: #fff0ed; color: #bd4035; }
+.us19-success-text { color: #16834a; font-size: 13px; font-weight: 700; }
+.us19-error-text { color: #b9382d; font-size: 13px; font-weight: 700; }
+.us19-info-box { margin-top: 24px; padding: 18px 19px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcff; }
+.us19-info-label { color: #737d96; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+.us19-info-value { display: block; margin-top: 6px; color: #15183f; font-size: 14px; overflow-wrap: anywhere; }
+.us19-note { margin-top: 10px; color: #68728c; font-size: 12px; line-height: 1.6; }
+.us19-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 23px; }
+.us19-footer { color: #8790a7; font-size: 11px; line-height: 1.6; margin-top: 30px; }
+@media (max-width: 600px) {
+  .us19-shell { grid-template-rows: 72px 1fr; }
+  .us19-header { padding-inline: 18px; }
+  .us19-logo { width: 55px; height: 50px; }
+  .us19-brand-name { font-size: 13px; }
+  .us19-main { min-height: calc(100vh - 72px); padding: 22px 14px; align-items: flex-start; }
+  .us19-card { padding: 25px 21px; }
+  .us19-title { font-size: 37px; }
+}
