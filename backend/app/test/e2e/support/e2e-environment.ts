@@ -56,11 +56,16 @@ export function resolveE2eDatabaseUrl(): string {
 }
 
 /**
- * Make the e2e target and seed password visible to the test app. Called from
- * `test/e2e/setup.ts` for every e2e worker, so `DATABASE_URL`/`SEED_PASSWORD`
- * are set before `AppModule` is evaluated.
+ * Make the e2e target, seed password and in-process email transport visible to
+ * the test app. Called from `test/e2e/setup.ts` for every e2e worker, so
+ * `DATABASE_URL`/`SEED_PASSWORD`/`EMAIL_TRANSPORT` are set before `AppModule` is
+ * evaluated.
+ *
+ * Email is forced to `memory` even when the developer's `.env` points at
+ * Mailtrap: no e2e test may send real mail.
  */
 export function applyE2eEnvironment(): void {
   process.env.DATABASE_URL = resolveE2eDatabaseUrl();
   process.env.SEED_PASSWORD = E2E_SEED_PASSWORD;
+  process.env.EMAIL_TRANSPORT = 'memory';
 }
