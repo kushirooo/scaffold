@@ -10,8 +10,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { CsrfGuard } from './auth/guards/csrf.guard.js';
 import { validateEnvironment } from './config/env.validation.js';
 import { HealthModule } from './health/health.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PrismaService } from './prisma/prisma.service.js';
+import { ProjectsModule } from './projects/projects.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule({
   // Observe proxies provider instances; the Prisma client keeps internal
@@ -34,7 +36,9 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
     PrismaModule,
     AuthModule,
     AccountsModule,
+    ProjectsModule,
     HealthModule,
+    NotificationsModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
     ObserveModule.forRoot({

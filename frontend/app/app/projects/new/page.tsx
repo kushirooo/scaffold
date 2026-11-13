@@ -12,13 +12,15 @@ export default function CreateProjectPage() {
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [budget, setBudget] = useState<number>(0);
+  const [budget, setBudget] = useState('');
   const [status, setStatus] = useState<ProjectStatus>('Active');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage(null);
 
     try {
       await createProject({
@@ -32,7 +34,7 @@ export default function CreateProjectPage() {
       router.push('/projects');
     } catch (err) {
       console.error(err);
-      alert('Failed to create project. Please check fields.');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to create project.');
     } finally {
       setIsSubmitting(false);
     }
@@ -51,6 +53,11 @@ export default function CreateProjectPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+        {errorMessage && (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+            {errorMessage}
+          </p>
+        )}
         <div>
           <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-2">Project Name</label>
           <input
@@ -107,7 +114,7 @@ export default function CreateProjectPage() {
               required
               min="0"
               value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              onChange={(e) => setBudget(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
             />
           </div>

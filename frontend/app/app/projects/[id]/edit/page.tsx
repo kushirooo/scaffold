@@ -4,12 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProjectStatus } from '@/types/project';
-import { fetchProjects, updateProject } from '@/services/projectService';
+import { fetchProject, updateProject } from '@/services/projectService';
 
 export default function EditProjectPage({
   params,
 }: {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
   const [projectId, setProjectId] = useState<string>('');
@@ -17,10 +17,11 @@ export default function EditProjectPage({
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [budget, setBudget] = useState<number>(0);
+  const [budget, setBudget] = useState('');
   const [status, setStatus] = useState<ProjectStatus>('Active');
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.resolve(params).then((resolvedParams) => {
@@ -29,33 +30,40 @@ export default function EditProjectPage({
   }, [params]);
 
   useEffect(() => {
-    if (projectId) {
-      loadProject();
-    }
-  }, [projectId]);
+    if (!projectId) return;
+    let cancelled = false;
 
-  const loadProject = async () => {
-    try {
-      const projects = await fetchProjects();
-      const current = projects.find((p) => p.id === projectId);
-      if (current) {
+    const load = async () => {
+      try {
+        const current = await fetchProject(projectId);
+        if (cancelled) return;
+        setErrorMessage(null);
         setName(current.name);
         setDescription(current.description);
         setStartDate(current.startDate || '');
         setEndDate(current.endDate || '');
-        setBudget(current.budget || 0);
+        setBudget(current.budget?.toString() ?? '');
         setStatus(current.status);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setErrorMessage(err instanceof Error ? err.message : 'Unable to load project.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage(null);
 
     try {
       await updateProject(projectId, {
@@ -69,7 +77,7 @@ export default function EditProjectPage({
       router.push('/projects');
     } catch (err) {
       console.error(err);
-      alert('Failed to update project.');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to update project.');
     } finally {
       setIsSubmitting(false);
     }
@@ -77,6 +85,17 @@ export default function EditProjectPage({
 
   if (loading) {
     return <div className="p-8 text-center text-slate-500">Loading project details...</div>;
+  }
+
+  if (errorMessage && !name) {
+    return (
+      <main className="p-8 text-center text-slate-700" role="alert">
+        <p>{errorMessage}</p>
+        <Link href="/projects" className="mt-3 inline-block text-[#08086F] underline">
+          Back to Projects
+        </Link>
+      </main>
+    );
   }
 
   return (
@@ -92,6 +111,11 @@ export default function EditProjectPage({
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+        {errorMessage && (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+            {errorMessage}
+          </p>
+        )}
         <div>
           <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-2">Project Name</label>
           <input
@@ -146,7 +170,7 @@ export default function EditProjectPage({
               required
               min="0"
               value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              onChange={(e) => setBudget(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
             />
           </div>
