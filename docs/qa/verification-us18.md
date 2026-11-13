@@ -27,6 +27,8 @@ amendment"; US18 AC2 is not presented as literally satisfied before ratification
 | 3 | `npm run test:e2e` | 4 files, 30/30 pass |
 | 4 | `npm run lint` | 0 warnings, 0 errors |
 | 5 | `npm run build` | `nest build` exit 0 |
+| 6 | `npm test` | 21 files, 113/113 pass |
+| 7 | `npm run test:db` | 5 files, 27/27 pass on `raf_pms_test` |
 
 ## Token-hash proof
 
