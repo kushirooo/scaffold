@@ -1,0 +1,31 @@
+=== US01 cookie/CSRF/CORS/tv smoke (real raf_pms, Phase-2 contract) ===
+server: http://127.0.0.1:4000   allowed origin: http://localhost:3000
+
+PASS  GET /health -> 200 {status:ok, db:up}
+PASS  POST /auth/login (X-MARS-CSRF: 1) -> 200
+PASS  mars_at flags: HttpOnly=yes Path=yes Max-Age=yes SameSite=yes Secure=no clear=no
+PASS  login body: user=pm@rafconsult.test role=PROJECT_MANAGER redirectTo=/dashboard expiresIn=3600 accessToken=no tokenType=no passwordHash=no
+PASS  login CORS: ACAO=http://localhost:3000 ACAC=true
+PASS  cookie jar stores mars_at with HttpOnly marker
+PASS  /auth/me with cookie -> 200 (user=pm@rafconsult.test role=PROJECT_MANAGER redirectTo=None expiresIn=None accessToken=no tokenType=no passwordHash=no)
+PASS  /auth/me without cookie -> 401 (Authentication required)
+PASS  login without X-MARS-CSRF -> 403 (Missing or invalid CSRF header)
+PASS  login with wrong X-MARS-CSRF value -> 403
+PASS  logout without X-MARS-CSRF -> 403
+PASS  rejected logout (CSRF) did not revoke the session
+PASS  Authorization header without cookie -> 401 (no fallback)
+PASS  allowed origin: exact ACAO + Allow-Credentials:true
+PASS  disallowed origin: no ACAO
+PASS  preflight: ACAO exact + ACAC true + X-MARS-CSRF allowed (HTTP 204)
+PASS  POST /auth/logout (X-MARS-CSRF: 1) -> 204
+PASS  logout clears mars_at: HttpOnly=yes Path=yes Max-Age=no SameSite=yes Secure=no clear=yes
+PASS  old cookie after logout -> 401 (Session is no longer valid)
+PASS  tv mismatch -> 401 (Session is no longer valid)
+PASS  token_version restored (0); same cookie works again -> 200
+PASS  admin -> 200, redirectTo=/dashboard, no token body
+PASS  pm -> 200, redirectTo=/dashboard, no token body
+PASS  worker -> 200, redirectTo=/dashboard, no token body
+PASS  viewer -> 200, redirectTo=/dashboard, no token body
+
+RESULT: PASS (25/25 checks)
+RESULT_EXIT=0

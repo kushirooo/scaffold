@@ -1,0 +1,32 @@
+=== MUTATION TESTING (throwaway copy; original source never edited) ===
+original digest before: 4630a7f1c011c8654c0e3a908e653e75d467a24527b3a7d396c4d56f7707dcee  -
+baseline unit (AuthCookies): Tests  4 passed (4)
+baseline e2e: Tests  25 passed (25)
+
+--- UNIT MUTATION: AuthCookies set: httpOnly false
+    applied: 1 matching line(s) | exit=1
+    CAUGHT: × sets mars_at as httpOnly, path-wide, lax and non-secure 6ms
+    CAUGHT: × clears mars_at with the same flags, without a max age 1ms
+    CAUGHT: × sets a secure, cross-site cookie with the configured lifetime 0ms
+    CAUGHT: × clears mars_at with secure and sameSite=none 0ms
+
+--- UNIT MUTATION: AuthCookies set: secure forced false
+    applied: 1 matching line(s) | exit=1
+    CAUGHT: × sets a secure, cross-site cookie with the configured lifetime 3ms
+    CAUGHT: × clears mars_at with secure and sameSite=none 1ms
+
+--- E2E MUTATION: AuthCookies clear: flags dropped
+    exit=1
+    CAUGHT: × revokes the session and clears the cookie on logout 34ms
+
+--- E2E MUTATION: JWT guard: verifyAsync replaced by decode (no signature/expiry check)
+    exit=1
+    CAUGHT: × rejects a tampered JWT cookie 33ms
+    CAUGHT: × rejects an expired JWT cookie 38ms
+
+--- E2E MUTATION: Role invalidation removed from resolveSession
+    exit=1
+    CAUGHT: × rejects a cookie after the user role changed 37ms
+
+original digest after:  4630a7f1c011c8654c0e3a908e653e75d467a24527b3a7d396c4d56f7707dcee  -
+ORIGINAL SOURCE UNCHANGED: yes

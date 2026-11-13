@@ -1,0 +1,14 @@
+npm run build exit=0
+--- dist entry:
+-rw-r--r-- 1 anoshizuku anoshizuku 540 Nov  9 12:18 dist/main.js
+--- dist is ESM (import statements):
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { AppModule, ObserveInstrument } from './app.module.js';
+import { configureApp } from './app.setup.js';
+--- generated client compiled/imported:
+dist/generated/prisma/enums.js.map
+dist/generated/prisma/models/User.js.map
+dist/generated/prisma/models/Credential.js.map
+dist/generated/prisma/models/Session.js.map
+dist/generated/prisma/models/PasswordResetToken.js.map

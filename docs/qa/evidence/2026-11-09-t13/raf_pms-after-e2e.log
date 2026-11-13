@@ -1,0 +1,16 @@
+=== raf_pms after e2e (must still be 6 users; token_version restored) ===
+users=6
+credentials=5
+sessions=30
+sessions_unrevoked=24
+email | token_version
+admin@rafconsult.test | 0
+inactive@rafconsult.test | 0
+invited@rafconsult.test | 0
+pm@rafconsult.test | 0
+viewer@rafconsult.test | 0
+worker@rafconsult.test | 0
+(6 rows)
+=== any unexpected test/fixture rows? ===
+non_demo_users=0
+fixture_users=0

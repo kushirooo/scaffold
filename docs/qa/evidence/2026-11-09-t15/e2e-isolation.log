@@ -1,0 +1,9 @@
+=== raf_pms counts before e2e (users/sessions/credentials): 6/53/5 ===
+=== raf_pms_e2e counts before: 6/12/5 ===
+=== raf_pms counts after e2e: 6/53/5 ===
+=== raf_pms_e2e counts after: 6/12/5 ===
+=== databases: ===
+postgres
+raf_pms
+raf_pms_e2e
+raf_pms_test

@@ -1,0 +1,7 @@
+=== boot validation: CORS_ORIGIN=* ===
+exit=1
+[Nest] 5  - 11/09/2026, 1:26:20 PM   ERROR [ExceptionHandler] Error: CORS_ORIGIN must not contain a wildcard "*"
+
+=== boot validation: SameSite=None without Secure ===
+exit=1
+[Nest] 15  - 11/09/2026, 1:26:21 PM   ERROR [ExceptionHandler] Error: COOKIE_SAMESITE=none requires COOKIE_SECURE=true

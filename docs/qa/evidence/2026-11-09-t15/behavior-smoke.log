@@ -1,0 +1,24 @@
+=== behavior smoke against raf_pms_e2e (build from T14 tree) ===
+server DB: raf_pms_e2e   raf_pms counts before smoke: 6/53/5
+
+PASS  /health -> 200 {ok,up}
+PASS  login (CSRF) -> 200
+PASS  mars_at set flags: HttpOnly=yes Path=yes Max-Age=yes SameSite=yes Secure=no clear=no
+PASS  login body: user=pm@rafconsult.test role=PROJECT_MANAGER redirectTo=/dashboard expiresIn=3600 accessToken=no tokenType=no passwordHash=no
+PASS  login CORS exact ACAO + credentials
+PASS  /auth/me with cookie -> 200
+PASS  /auth/me without cookie -> 401
+PASS  login without CSRF -> 403
+PASS  logout without CSRF -> 403
+PASS  rejected logout did not revoke session
+PASS  CORS allowed origin exact ACAO + credentials
+PASS  CORS disallowed origin: no ACAO
+PASS  preflight allows X-MARS-CSRF (HTTP 204)
+PASS  logout with CSRF -> 204
+PASS  logout clears cookie with flags: HttpOnly=yes Path=yes Max-Age=no SameSite=yes Secure=no clear=yes
+PASS  old cookie after logout -> 401
+PASS  tv mismatch -> 401
+PASS  tv restored; same cookie -> 200
+
+raf_pms counts after smoke: 6/53/5  (unchanged expected)
+RESULT: PASS (18/18 checks)

@@ -1,0 +1,8 @@
+# Generated Prisma client (recreated by `prisma generate`)
+src/generated/
+
+# Build output
+dist/
+
+# Test coverage output
+coverage/

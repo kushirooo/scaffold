@@ -1,0 +1,374 @@
+{
+  "info": {
+    "name": "MARS US01 — cookie session + CSRF",
+    "description": "Manual checks for US01 against the local API.\n\nSetup:\n1. Start PostgreSQL and the API: docker compose up -d postgres; cd backend/app; npm run start:dev\n2. Set the collection variable `password` to the value of SEED_PASSWORD in backend/app/.env (the default in the README is RafConsult!2026).\n3. Run the requests top to bottom. Keep `baseUrl` and `altBaseUrl` as they are.\n\nPostman stores the httpOnly `mars_at` cookie automatically. The old-cookie request uses 127.0.0.1 instead of localhost so the cookie jar cannot silently replay the new cookie; it sends the value saved by the login test in the `Cookie` header.\n\nFor tokenVersion invalidation, run this against the local database and then repeat the `Me (cookie)` request:\n  UPDATE users SET token_version = token_version + 1 WHERE email = 'pm@rafconsult.test';\nThe old cookie should return 401. Restart the session with a fresh login afterwards.\n\nPostman is not a browser and does not enforce CORS. The preflight request shows the headers the browser will enforce; do the final cross-site check in Chrome or Safari against staging.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "altBaseUrl",
+      "value": "http://127.0.0.1:4000"
+    },
+    {
+      "key": "email",
+      "value": "pm@rafconsult.test"
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "origin",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "marsAt",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 · Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('database is up', function () {",
+              "  var body = pm.response.json();",
+              "  pm.expect(body.status).to.eql('ok');",
+              "  pm.expect(body.db).to.eql('up');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "02 · Login (valid)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('no token in the body', function () {",
+              "  var body = pm.response.json();",
+              "  pm.expect(body).to.not.have.property('accessToken');",
+              "  pm.expect(body).to.not.have.property('token');",
+              "  pm.expect(body).to.have.property('redirectTo', '/dashboard');",
+              "});",
+              "pm.test('sets an HttpOnly mars_at cookie', function () {",
+              "  var sc = (pm.response.headers.get('Set-Cookie') || '').toLowerCase();",
+              "  pm.expect(sc).to.include('mars_at=');",
+              "  pm.expect(sc).to.include('httponly');",
+              "  pm.expect(sc).to.include('samesite=lax');",
+              "});",
+              "pm.test('saves the cookie for the old-cookie check', function () {",
+              "  var value = pm.cookies.get('mars_at');",
+              "  pm.expect(value && value.length > 0).to.be.true;",
+              "  pm.collectionVariables.set('marsAt', value);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-MARS-CSRF",
+            "value": "1"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "03 · Me (cookie)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+              "pm.test('returns the signed-in email', function () {",
+              "  var body = pm.response.json();",
+              "  pm.expect(body.user.email).to.eql(pm.collectionVariables.get('email'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "04 · Me (no cookie)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 without a cookie', function () { pm.response.to.have.status(401); });",
+              "pm.test('generic authentication message', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('Authentication required');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{altBaseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "05 · Login (wrong password)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 for a wrong password', function () { pm.response.to.have.status(401); });",
+              "pm.test('same generic message', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('Invalid email or password');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-MARS-CSRF",
+            "value": "1"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"definitely-wrong\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "06 · Logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+              "pm.test('clears the mars_at cookie', function () {",
+              "  var sc = (pm.response.headers.get('Set-Cookie') || '').toLowerCase();",
+              "  pm.expect(sc).to.include('mars_at=');",
+              "  pm.expect(sc.includes('max-age=0') || sc.includes('1970')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-MARS-CSRF",
+            "value": "1"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/logout"
+      }
+    },
+    {
+      "name": "07 · Me (old cookie after logout)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('old cookie is rejected', function () { pm.response.to.have.status(401); });",
+              "pm.test('session is no longer valid', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('Session is no longer valid');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Cookie",
+            "value": "mars_at={{marsAt}}"
+          }
+        ],
+        "url": "{{altBaseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "08 · Logout without CSRF header",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 without X-MARS-CSRF', function () { pm.response.to.have.status(403); });",
+              "pm.test('CSRF message', function () {",
+              "  pm.expect(pm.response.json().message).to.eql('Missing or invalid CSRF header');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/auth/logout"
+      }
+    },
+    {
+      "name": "09 · Login without CSRF header",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 without X-MARS-CSRF', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "10 · CORS preflight (allowed origin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('preflight succeeds', function () { pm.expect([200, 204]).to.include(pm.response.code); });",
+              "pm.test('exact origin is echoed', function () {",
+              "  pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.eql(pm.collectionVariables.get('origin'));",
+              "});",
+              "pm.test('credentials are allowed', function () {",
+              "  pm.expect(pm.response.headers.get('Access-Control-Allow-Credentials')).to.eql('true');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "{{origin}}"
+          },
+          {
+            "key": "Access-Control-Request-Method",
+            "value": "POST"
+          },
+          {
+            "key": "Access-Control-Request-Headers",
+            "value": "content-type,x-mars-csrf"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "11 · CORS (disallowed origin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('no ACAO for a disallowed origin', function () {",
+              "  var acao = pm.response.headers.get('Access-Control-Allow-Origin');",
+              "  pm.expect(acao === null || acao === undefined).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "https://evil.example"
+          }
+        ],
+        "url": "{{baseUrl}}/health"
+      }
+    }
+  ]
+}
