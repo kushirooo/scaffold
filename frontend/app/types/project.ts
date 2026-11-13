@@ -18,6 +18,7 @@ export interface ProjectMember {
 
 export interface Project {
   id: string;
+  ownerId?: string;
   name: string;
   description: string;
   status: ProjectStatus;
@@ -28,4 +29,15 @@ export interface Project {
   createdAt?: string;
   updatedAt: string;
   members?: ProjectMember[];
+}
+
+export interface ProjectNotification {
+  id: string;
+  type: 'PROJECT_ASSIGNED';
+  title: string;
+  message: string;
+  projectId: string;
+  projectName: string;
+  readAt: string | null;
+  createdAt: string;
 }

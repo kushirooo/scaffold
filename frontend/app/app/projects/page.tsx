@@ -9,45 +9,57 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [loading, setLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    loadProjects();
-  }, [activeTab]);
-
-  const loadProjects = async () => {
-    setLoading(true);
-    try {
-      if (activeTab === 'active') {
-        const data = await fetchProjects();
-        setProjects(data.filter((p) => !p.isArchived));
-      } else {
-        const data = await fetchArchivedProjects();
-        setProjects(data);
+    let cancelled = false;
+    const load = async () => {
+      setErrorMessage(null);
+      try {
+        const data = activeTab === 'active'
+          ? await fetchProjects()
+          : await fetchArchivedProjects();
+        if (!cancelled) {
+          setProjects(activeTab === 'active' ? data.filter((p) => !p.isArchived) : data);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setErrorMessage(err instanceof Error ? err.message : 'Unable to load projects.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, refreshKey]);
 
   const handleDelete = async (id: string) => {
     try {
       await softDeleteProject(id);
       setDeleteModalId(null);
-      loadProjects();
+      setLoading(true);
+      setRefreshKey((key) => key + 1);
     } catch (err) {
       console.error(err);
+      setErrorMessage(err instanceof Error ? err.message : 'Unable to archive this project.');
     }
   };
 
   const handleRestore = async (id: string) => {
     try {
       await restoreProject(id);
-      loadProjects();
+      setLoading(true);
+      setRefreshKey((key) => key + 1);
     } catch (err) {
       console.error(err);
+      setErrorMessage(err instanceof Error ? err.message : 'Unable to restore this project.');
     }
   };
 
@@ -71,7 +83,10 @@ export default function ProjectsPage() {
       {/* Tabs */}
       <div className="flex gap-4 mb-6 border-b border-slate-200 pb-2">
         <button
-          onClick={() => setActiveTab('active')}
+          onClick={() => {
+            setLoading(true);
+            setActiveTab('active');
+          }}
           className={`pb-2 px-3 text-sm font-medium ${
             activeTab === 'active' ? 'border-b-2 text-[#08086F] border-[#08086F]' : 'text-slate-500'
           }`}
@@ -79,7 +94,10 @@ export default function ProjectsPage() {
           Active Projects
         </button>
         <button
-          onClick={() => setActiveTab('archived')}
+          onClick={() => {
+            setLoading(true);
+            setActiveTab('archived');
+          }}
           className={`pb-2 px-3 text-sm font-medium ${
             activeTab === 'archived' ? 'border-b-2 text-[#08086F] border-[#08086F]' : 'text-slate-500'
           }`}
@@ -89,7 +107,21 @@ export default function ProjectsPage() {
       </div>
 
       {/* Projects List / Grid */}
-      {loading ? (
+      {errorMessage ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          {errorMessage}
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              setRefreshKey((key) => key + 1);
+            }}
+            className="ml-3 font-semibold underline"
+          >
+            Retry
+          </button>
+        </div>
+      ) : loading ? (
         <div className="py-12 text-center text-slate-500">Loading projects...</div>
       ) : projects.length === 0 ? (
         <div className="py-12 text-center text-slate-500 border border-dashed rounded-xl bg-white">
