@@ -8,6 +8,8 @@ const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 export type CookieSameSite = 'lax' | 'strict' | 'none';
 
+export type EmailTransport = 'smtp' | 'resend' | 'memory';
+
 export interface ValidatedEnvironment {
   NODE_ENV: string;
   PORT: number;
@@ -19,6 +21,18 @@ export interface ValidatedEnvironment {
   COOKIE_SECURE: boolean;
   COOKIE_SAMESITE: CookieSameSite;
   FRONTEND_URL: string;
+  EMAIL_TRANSPORT: EmailTransport;
+  MAIL_FROM: string;
+  /** Normalised comma-separated list; kept for config/logging. */
+  ADMIN_ALERT_EMAIL: string;
+  /** Parsed recipients for the failure alert. */
+  ADMIN_ALERT_EMAILS: string[];
+  INVITE_TTL_SECONDS: number;
+  SMTP_HOST?: string;
+  SMTP_PORT?: number;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
+  RESEND_API_KEY?: string;
 }
 
 function isLocalHostname(hostname: string): boolean {
@@ -96,6 +110,112 @@ function parseSameSite(raw: unknown): CookieSameSite {
   }
 
   throw new Error('COOKIE_SAMESITE must be one of "lax", "strict" or "none"');
+}
+
+const EMAIL_TRANSPORTS = new Set<EmailTransport>(['smtp', 'resend', 'memory']);
+const DEVELOPMENT_MAIL_FROM =
+  'RAF CONSULT MARS <no-reply@rafconsult.test>';
+const DEVELOPMENT_ADMIN_ALERT_EMAIL = 'admin@rafconsult.test';
+
+function parseEmailTransport(
+  raw: unknown,
+  isProduction: boolean,
+): EmailTransport {
+  if (raw === undefined || raw === null || raw === '') {
+    if (isProduction) {
+      throw new Error('EMAIL_TRANSPORT is required in production');
+    }
+    return 'memory';
+  }
+
+  const value = String(raw).toLowerCase() as EmailTransport;
+  if (!EMAIL_TRANSPORTS.has(value)) {
+    throw new Error(
+      'EMAIL_TRANSPORT must be one of "smtp", "resend" or "memory"',
+    );
+  }
+  if (isProduction && value === 'memory') {
+    throw new Error('EMAIL_TRANSPORT=memory is not allowed in production');
+  }
+
+  return value;
+}
+
+function parseMailFrom(raw: unknown, isProduction: boolean): string {
+  const source =
+    raw === undefined || raw === null || raw === ''
+      ? isProduction
+        ? ''
+        : DEVELOPMENT_MAIL_FROM
+      : String(raw).trim();
+
+  if (!source) {
+    throw new Error('MAIL_FROM is required in production');
+  }
+  if (!source.includes('@')) {
+    throw new Error('MAIL_FROM must contain an email address');
+  }
+
+  return source;
+}
+
+function parseAdminAlertEmails(
+  raw: unknown,
+  isProduction: boolean,
+): { normalised: string; emails: string[] } {
+  const source =
+    raw === undefined || raw === null || raw === ''
+      ? isProduction
+        ? ''
+        : DEVELOPMENT_ADMIN_ALERT_EMAIL
+      : String(raw);
+
+  const emails = source
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+
+  if (emails.length === 0) {
+    throw new Error('ADMIN_ALERT_EMAIL is required in production');
+  }
+  for (const email of emails) {
+    if (!email.includes('@')) {
+      throw new Error(
+        `ADMIN_ALERT_EMAIL entry "${email}" is not an email address`,
+      );
+    }
+  }
+
+  return { normalised: emails.join(','), emails };
+}
+
+function parsePositiveInteger(
+  name: string,
+  raw: unknown,
+  fallback: number,
+): number {
+  if (raw === undefined || raw === null || raw === '') {
+    return fallback;
+  }
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return value;
+}
+
+function parsePort(name: string, raw: unknown, fallback: number): number {
+  const value =
+    raw === undefined || raw === null || raw === ''
+      ? fallback
+      : Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(`${name} must be an integer between 1 and 65535`);
+  }
+
+  return value;
 }
 
 function parseFrontendUrl(raw: string, isProduction: boolean): string {
@@ -196,6 +316,52 @@ export function validateEnvironment(
     isProduction,
   );
 
+  const emailTransport = parseEmailTransport(
+    config.EMAIL_TRANSPORT,
+    isProduction,
+  );
+  const mailFrom = parseMailFrom(config.MAIL_FROM, isProduction);
+  const adminAlert = parseAdminAlertEmails(
+    config.ADMIN_ALERT_EMAIL,
+    isProduction,
+  );
+  const inviteTtlSeconds = parsePositiveInteger(
+    'INVITE_TTL_SECONDS',
+    config.INVITE_TTL_SECONDS,
+    86_400,
+  );
+
+  let smtpHost: string | undefined;
+  let smtpPort: number | undefined;
+  let smtpUser: string | undefined;
+  let smtpPass: string | undefined;
+  let resendApiKey: string | undefined;
+
+  if (emailTransport === 'smtp') {
+    smtpHost = String(config.SMTP_HOST ?? '').trim();
+    smtpUser = String(config.SMTP_USER ?? '').trim();
+    smtpPass = String(config.SMTP_PASS ?? '');
+    if (!smtpHost) {
+      throw new Error('SMTP_HOST is required when EMAIL_TRANSPORT=smtp');
+    }
+    if (!smtpUser) {
+      throw new Error('SMTP_USER is required when EMAIL_TRANSPORT=smtp');
+    }
+    if (!smtpPass) {
+      throw new Error('SMTP_PASS is required when EMAIL_TRANSPORT=smtp');
+    }
+    smtpPort = parsePort('SMTP_PORT', config.SMTP_PORT, 587);
+  }
+
+  if (emailTransport === 'resend') {
+    resendApiKey = String(config.RESEND_API_KEY ?? '').trim();
+    if (!resendApiKey) {
+      throw new Error(
+        'RESEND_API_KEY is required when EMAIL_TRANSPORT=resend',
+      );
+    }
+  }
+
   return {
     NODE_ENV: nodeEnv,
     PORT: port,
@@ -207,5 +373,15 @@ export function validateEnvironment(
     COOKIE_SECURE: cookieSecure,
     COOKIE_SAMESITE: cookieSameSite,
     FRONTEND_URL: frontendUrl,
+    EMAIL_TRANSPORT: emailTransport,
+    MAIL_FROM: mailFrom,
+    ADMIN_ALERT_EMAIL: adminAlert.normalised,
+    ADMIN_ALERT_EMAILS: adminAlert.emails,
+    INVITE_TTL_SECONDS: inviteTtlSeconds,
+    SMTP_HOST: smtpHost,
+    SMTP_PORT: smtpPort,
+    SMTP_USER: smtpUser,
+    SMTP_PASS: smtpPass,
+    RESEND_API_KEY: resendApiKey,
   };
 }

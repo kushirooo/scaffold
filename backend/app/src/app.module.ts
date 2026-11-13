@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { createObserveModule } from '@nestjs/observe';
+import { AccountsModule } from './accounts/accounts.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -26,8 +28,12 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
       cache: true,
       validate: validateEnvironment,
     }),
+    // In-process domain events (US18 `account.created` seam). Listeners never
+    // throw, so a failing welcome email cannot fail the creating request.
+    EventEmitterModule.forRoot(),
     PrismaModule,
     AuthModule,
+    AccountsModule,
     HealthModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
