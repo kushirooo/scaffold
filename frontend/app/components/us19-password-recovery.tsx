@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
 
 type ForgotStatus = "form" | "sent" | "failed";
@@ -189,19 +190,13 @@ export function ForgotPasswordPage() {
 }
 
 export function ResetPasswordPage() {
-  const [token, setToken] = useState("");
-  const [status, setStatus] = useState<ResetStatus>("form");
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") ?? "";
+  const [status, setStatus] = useState<ResetStatus>(() => (token ? "form" : "expired"));
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const currentToken = params.get("token") ?? "";
-    setToken(currentToken);
-    if (!currentToken) setStatus("expired");
-  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
