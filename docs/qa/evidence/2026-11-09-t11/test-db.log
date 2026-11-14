@@ -1,0 +1,27 @@
+npm notice run nest-typescript-starter@1.0.0 test:db
+npm notice run vitest run --config ./vitest.config.db.ts
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v4.1.11 /home/anoshizuku/Projects/scaffold/backend/app
+
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "raf_pms_test", schema "public" at "127.0.0.1:5432"
+
+1 migration found in prisma/migrations
+
+
+No pending migrations to apply.
+ ✓ test/db/users.repository.db-spec.ts (9 tests) 207ms
+ ✓ test/db/sessions.repository.db-spec.ts (6 tests) 153ms
+ ✓ test/db/schema.db-spec.ts (5 tests) 156ms
+ ✓ test/db/seed.db-spec.ts (2 tests) 488ms
+
+ Test Files  4 passed (4)
+      Tests  22 passed (22)
+   Start at  13:02:08
+   Duration  2.94s (transform 65ms, setup 0ms, import 572ms, tests 1.00s, environment 0ms)
+

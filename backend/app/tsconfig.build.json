@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // The app is deployed as JavaScript, not consumed as a library. Turning
+    // declarations off also avoids TS4094 on Prisma's generated client, whose
+    // `#private` class fields cannot be represented in a .d.ts.
+    "declaration": false
   },
   "include": ["src"],
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]

@@ -1,0 +1,38 @@
+=== guard: TEST_DATABASE_URL pointed at development DB (raf_pms) ===
+ ❯ TestProject._initializeGlobalSetup node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:10813:50
+ ❯ Vitest.initializeGlobalSetup node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13812:35
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13655:6
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13684:11
+ ❯ node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:13546:19
+ ❯ startVitest node_modules/vitest/dist/chunks/cli-api.CnMVyzaz.js:14621:8
+ ❯ start node_modules/vitest/dist/chunks/cac.uFydS1Z4.js:2340:15
+ ❯ CAC.run node_modules/vitest/dist/chunks/cac.uFydS1Z4.js:2318:2
+
+
+
+
+guard exit=1
+
+=== no-false-pass: TEST_DATABASE_URL points at a nonexistent database ===
+  └─ 20261109041339_init_auth_schema/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+ ✓ test/db/seed.db-spec.ts (2 tests) 463ms
+ ✓ test/db/users.repository.db-spec.ts (9 tests) 149ms
+ ✓ test/db/schema.db-spec.ts (5 tests) 97ms
+ ✓ test/db/sessions.repository.db-spec.ts (6 tests) 126ms
+
+ Test Files  4 passed (4)
+      Tests  22 passed (22)
+   Start at  13:02:26
+   Duration  2.43s (transform 69ms, setup 0ms, import 410ms, tests 834ms, environment 0ms)
+
+nonexistent-db exit=0
+
+=== raf_pms unchanged after the DB suite (must still be 6) ===
+6
+
+=== raf_pms_test was the DB exercised (state after suite) ===
+6
+1

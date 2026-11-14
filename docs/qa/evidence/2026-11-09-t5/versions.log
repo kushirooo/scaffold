@@ -1,0 +1,5 @@
+v26.13.0
+12.2.2
+prisma                  : 6.19.3
+@prisma/client          : 6.19.3
+Computed binaryTarget   : debian-openssl-3.0.x

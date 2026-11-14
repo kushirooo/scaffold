@@ -1,0 +1,13 @@
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --check .
+Checking formatting...
+[warn] src/app.setup.ts
+[warn] src/auth/auth.controller.ts
+[warn] src/auth/auth.module.ts
+[warn] src/auth/auth.service.spec.ts
+[warn] src/auth/auth.service.ts
+[warn] src/auth/dto/login.dto.ts
+[warn] src/auth/role-dashboard.spec.ts
+[warn] test/auth.e2e-spec.ts
+[warn] test/support/in-memory.repositories.ts
+[warn] Code style issues found in 9 files. Run Prettier with --write to fix.

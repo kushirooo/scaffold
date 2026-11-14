@@ -1,0 +1,30 @@
+=== prettier version ===
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --version
+3.9.6
+
+=== prettier --file-info (ignore resolution) ===
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --file-info src/generated/prisma/client.ts
+{ "ignored": true, "inferredParser": null }
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --file-info dist/main.js
+{ "ignored": true, "inferredParser": null }
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --file-info coverage/coverage-final.json
+{ "ignored": true, "inferredParser": null }
+npm notice run nest-typescript-starter@1.0.0 npx
+npm notice run 'prettier' --file-info src/users/prisma-users.repository.ts
+{ "ignored": false, "inferredParser": "typescript" }
+
+=== prettier --check . failing files vs T6 delta ===
+(T6 delta: .prettierignore, vitest.config.ts, vitest.config.e2e.ts, prisma/seed.ts, src/users/prisma-users.repository.ts, src/users/prisma-users.repository.spec.ts, src/sessions/prisma-sessions.repository.spec.ts)
+  [warn] src/app.setup.ts
+  [warn] src/auth/auth.controller.ts
+  [warn] src/auth/auth.module.ts
+  [warn] src/auth/auth.service.spec.ts
+  [warn] src/auth/auth.service.ts
+  [warn] src/auth/dto/login.dto.ts
+  [warn] src/auth/role-dashboard.spec.ts
+  [warn] test/auth.e2e-spec.ts
+  [warn] test/support/in-memory.repositories.ts

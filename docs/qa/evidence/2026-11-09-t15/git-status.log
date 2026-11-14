@@ -1,0 +1,40 @@
+ M backend/app/.env.example
+ M backend/app/package-lock.json
+ M backend/app/package.json
+ M backend/app/src/app.module.ts
+ M backend/app/src/app.setup.ts
+ M backend/app/src/auth/auth.controller.ts
+ M backend/app/src/auth/auth.module.ts
+ M backend/app/src/auth/auth.service.spec.ts
+ M backend/app/src/auth/auth.service.ts
+ M backend/app/src/auth/auth.types.ts
+ M backend/app/src/auth/dto/login.dto.ts
+ M backend/app/src/auth/guards/jwt-auth.guard.ts
+ M backend/app/src/auth/role-dashboard.spec.ts
+ M backend/app/src/auth/role-dashboard.ts
+ M backend/app/src/config/env.validation.ts
+ D backend/app/src/database/database.module.ts
+ D backend/app/src/sessions/postgres-sessions.repository.ts
+ D backend/app/src/users/postgres-users.repository.ts
+ M backend/app/src/users/prisma-users.repository.spec.ts
+ M backend/app/src/users/prisma-users.repository.ts
+ M backend/app/src/users/user.types.ts
+ M backend/app/test/auth.e2e-spec.ts
+ M backend/app/test/db/users.repository.db-spec.ts
+ M backend/app/test/support/in-memory.repositories.ts
+ M backend/app/vitest.config.e2e.ts
+ M docs/api-contract-us01.md
+ M docs/qa/ac-matrix.md
+ M docs/qa/strategy.md
+ M docs/qa/verification-local-db.md
+?? backend/app/src/auth/auth.cookies.spec.ts
+?? backend/app/src/auth/auth.cookies.ts
+?? backend/app/src/auth/guards/csrf.guard.ts
+?? backend/app/src/config/env.validation.spec.ts
+?? backend/app/src/health/
+?? backend/app/test/e2e/
+?? backend/app/test/health.e2e-spec.ts
+?? docs/qa/evidence/2026-11-09-t13/
+?? docs/qa/evidence/2026-11-09-t15/
+?? docs/qa/verification-us01-cookies.md
+?? docs/reviews/us01-cookie-reconciliation-review.md

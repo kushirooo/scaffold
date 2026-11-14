@@ -1,0 +1,23 @@
+=== static: Bearer text anywhere in src/test/contract? ===
+NONE
+
+=== static: Authorization references (only negative e2e test expected) ===
+grep: src/generated/prisma/libquery_engine-debian-openssl-3.0.x.so.node: binary file matches
+test/auth.e2e-spec.ts:213:  it('ignores the Authorization header (cookie transport only)', async () => {
+test/auth.e2e-spec.ts:219:      .set('Authorization', token)
+
+=== static: shims removed ===
+gone: src/database
+gone: src/users/postgres-users.repository.ts
+gone: src/sessions/postgres-sessions.repository.ts
+
+=== static: pg references (text files) ===
+none
+package.json: no pg/@types/pg
+
+=== static: token in response bodies (only negative assertions expected) ===
+none outside negative assertions
+
+=== cookie-parser dependency ===
+46:    "cookie-parser": "^1.4.7",
+55:    "@types/cookie-parser": "^1.4.10",

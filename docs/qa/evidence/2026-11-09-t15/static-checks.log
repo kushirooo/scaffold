@@ -1,0 +1,35 @@
+=== T14 delta files ===
+  src/auth/auth.cookies.spec.ts
+  test/auth.e2e-spec.ts
+  test/e2e/global-setup.ts
+  test/e2e/setup.ts
+  test/e2e/support/e2e-environment.ts
+
+=== hardcoded demo password in tests/src/prisma? (contract docs excluded) ===
+NONE
+
+=== SEED_PASSWORD required by e2e suite ===
+23:const PASSWORD = process.env.SEED_PASSWORD;
+26:    'SEED_PASSWORD is not set for the e2e suite. Check test/e2e/setup.ts.',
+
+=== e2e DB isolation wiring ===
+backend/app/test/e2e/support/e2e-environment.ts:7:export const DEFAULT_E2E_DATABASE_URL =
+backend/app/test/e2e/support/e2e-environment.ts:8:  'postgresql://postgres:postgres@127.0.0.1:5432/raf_pms_e2e';
+backend/app/test/e2e/support/e2e-environment.ts:41:  const databaseUrl = process.env.E2E_DATABASE_URL ?? DEFAULT_E2E_DATABASE_URL;
+backend/app/test/e2e/support/e2e-environment.ts:45:    throw new Error('E2E_DATABASE_URL must include a database name.');
+backend/app/test/e2e/support/e2e-environment.ts:50:      `Refusing to run e2e against the development database "${DEVELOPMENT_DATABASE_NAME}". ` +
+backend/app/test/e2e/support/e2e-environment.ts:51:        'Set E2E_DATABASE_URL to a dedicated database such as "raf_pms_e2e".',
+backend/app/.env.example:16:E2E_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/raf_pms_e2e
+
+=== contract patches ===
+47:mars_at=<JWT>; Max-Age=3600; Path=/; Expires=<now + 3600 s, e.g. Mon, 09 Nov 2026 06:23:54 GMT>; HttpOnly; SameSite=Lax
+171:  3. loads `sessions.id = sid`, requires `revoked_at IS NULL` and requires `expires_at` to be in the future compared against the **API server's clock** (the same clock that produced `expiresIn`), and checks it belongs to `sub`;
+248:`db:seed` refuses to run with `NODE_ENV=production` unless `ALLOW_DEMO_SEED=true`.
+285:| `E2E_DATABASE_URL` | no | `.../raf_pms_e2e` | Dedicated DB for `npm run test:e2e`; the suite migrates/seeds it and refuses `raf_pms` |
+287:| `ALLOW_DEMO_SEED` | no | unset | `true` lets `db:seed` run when `NODE_ENV=production`; never set in production |
+315:`test:e2e` targets `E2E_DATABASE_URL` (default `postgresql://postgres:postgres@127.0.0.1:5432/raf_pms_e2e`). Its global setup refuses a URL naming `raf_pms`, applies the Prisma migrations, seeds the six demo accounts with a fixed e2e password, and points every test worker at that database. **CI prerequisite:** provide a `raf_pms_e2e` database in the Postgres service container (or set `E2E_DATABASE_URL`) before running the e2e job; the setup fails with an actionable message if the database does not exist.
+322:2. **US02 (account creation):** create users through `UsersRepository.create()` so `users` + `credentials` stay consistent, and hash with `PasswordHasher`. Deactivated users are blocked from login automatically. **Invited accounts (D4):** `CreateUserInput.passwordHash` is currently required, so `create()` cannot yet create a user without a password. US02 must first make it optional (or add a dedicated invited-user method); the schema already supports it (`Credential?`, nullable `password_hash`) and login treats a missing/null hash as the generic 401.
+
+=== e2e fixture password is test-only (not the demo default) ===
+14:export const E2E_SEED_PASSWORD = '<e2e-fixture-redacted>';
+65:  process.env.SEED_PASSWORD = E2E_SEED_PASSWORD;

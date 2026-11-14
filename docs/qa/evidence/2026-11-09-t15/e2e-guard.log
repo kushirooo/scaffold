@@ -1,0 +1,8 @@
+=== guard: E2E_DATABASE_URL points at raf_pms (development DB) ===
+raf_pms counts before guard: 6/53/5
+guard exit=1
+No test files found, exiting with code 1
+Error: Refusing to run e2e against the development database "raf_pms". Set E2E_DATABASE_URL to a dedicated database such as "raf_pms_e2e".
+     50|       `Refusing to run e2e against the development database "${DEVELOP…
+raf_pms counts after guard: 6/53/5
+GUARD: raf_pms unchanged ✔
