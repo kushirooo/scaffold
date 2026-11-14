@@ -5,7 +5,7 @@
 | Task | task-7 (k71) — US19 edge-case matrix + QA evidence |
 | Owner / verified by | implementer self-check + independent review (task-9) + Lead manual API/header run |
 | Date / environment | 2026-11-14 10:24 Asia/Kuala_Lumpur; agent sandbox, Node v26.13.0, local PostgreSQL 18 (`raf_pms_test`, `raf_pms_e2e`) |
-| Revision | `feat/us19-backend` @ `8ca728d` + `fix/us19-frontend-contract` @ `569924f` (T10 P3 fix after review) |
+| Revision | `feat/us19-backend` @ `49bf00c` + `fix/us19-frontend-contract` @ `569924f` (T10 P3 fix + CI TTL coercion) |
 | Verdict | **PASS (local)** for the US19 API; US18 AC1, CI and staging `DEFERRED` |
 
 `[OPEN-1]`: US19 AC3 asks for "system complexity rules"; the implemented policy is the
@@ -16,7 +16,7 @@ blocklist** — *met per agreed deviation, pending SM amendment*. Literal AC3 is
 
 | # | Command | Result |
 |---|---|---|
-| 1 | `npm test` | exit 0 — 22 files, **150/150** |
+| 1 | `npm test` | exit 0 — 22 files, **151/151** |
 | 2 | `npm run test:db` | exit 0 — 6 files, **43/43** on `raf_pms_test` |
 | 3 | `npm run test:e2e` | exit 0 — 5 files, **56/56** on `raf_pms_e2e` |
 | 4 | `npm run lint` | exit 0 — 0 warnings, 0 errors |
@@ -49,7 +49,7 @@ Deferred is not passed; no CI or staging result is claimed.
 
 ## Defects found
 
-None blocking. Independent review PASS with 2 P3s, both resolved — alert error-message redaction (`8ca728d`) and stale contract counts (Lead docs). Known limitations (not defects): no forgot-password rate limit, forgot timing not equalised, exact-match blocklist, no token-row cleanup. Add throttling before production.
+None blocking. Independent review PASS with 2 P3s, both resolved — alert error-message redaction (`8ca728d`) and stale contract counts (Lead docs). Known limitations (not defects): no forgot-password rate limit, forgot timing not equalised, exact-match blocklist, no token-row cleanup. CI-only TTL string-coercion regression fixed (`49bf00c`). Add throttling before production.
 
 ## Honesty checklist
 

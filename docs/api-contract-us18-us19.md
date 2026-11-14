@@ -279,7 +279,7 @@ deferred list live in `docs/qa/verification-us19.md`. Local commands (from `back
 ```bash
 npx vitest run --config ./vitest.config.e2e.ts test/auth-reset.e2e-spec.ts   # 26 passed
 npm run test:db                                                              # 43 passed
-npm test                                                                     # 150 passed
+npm test                                                                     # 151 passed
 npm run test:e2e                                                             # 56 passed
 npm run lint && npm run build
 ```
