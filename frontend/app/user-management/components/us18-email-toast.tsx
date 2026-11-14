@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { ToastKind } from "../lib/user-types";
+import type { ToastKind } from "../user-types";
 
 interface Us18EmailToastProps {
   kind: ToastKind;

@@ -10,7 +10,7 @@ import {
   resendWelcomeEmail,
   setUserStatus,
   updateUser,
-} from "../lib/users-api";
+} from "../users-api";
 import {
   SYSTEM_ROLES,
   USER_POSITIONS,
@@ -19,7 +19,7 @@ import {
   type ToastKind,
   type UserInput,
   type UserRecord,
-} from "../lib/user-types";
+} from "../user-types";
 import { Us18EmailToast } from "./us18-email-toast";
 
 type DialogState =
@@ -187,6 +187,7 @@ export function UserManagementDashboard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- WIP prototype; rewritten in STAB-US02
     void loadUsers();
   }, [loadUsers]);
 
@@ -212,10 +213,12 @@ export function UserManagementDashboard() {
   const inactiveCount = users.length - activeCount;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- WIP prototype; rewritten in STAB-US02
     setPage(1);
   }, [query, positionFilter, roleFilter, statusFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- WIP prototype; rewritten in STAB-US02
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
@@ -525,7 +528,7 @@ export function UserManagementDashboard() {
                 </div>
                 <label className="sm:col-span-2"><FieldLabel required>Full name</FieldLabel><input autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. John Smith" className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.name ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} />{formErrors.name ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.name}</span> : null}</label>
                 <label className="sm:col-span-2"><FieldLabel required>Email address</FieldLabel><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="name@rafconsult.my" autoComplete="email" className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.email ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} />{formErrors.email ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.email}</span> : null}</label>
-                <label className="sm:col-span-2"><FieldLabel required>Position</FieldLabel><select value={form.position} onChange={(event) => setForm((current) => ({ ...current, position: event.target.value as UserInput["position"] }))} className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.position ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`}>{USER_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}</select><span className="mt-1 block text-[10px] text-slate-400">Employee's actual job title.</span>{formErrors.position ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.position}</span> : null}</label>
+                <label className="sm:col-span-2"><FieldLabel required>Position</FieldLabel><select value={form.position} onChange={(event) => setForm((current) => ({ ...current, position: event.target.value as UserInput["position"] }))} className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.position ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`}>{USER_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}</select><span className="mt-1 block text-[10px] text-slate-400">Employee&apos;s actual job title.</span>{formErrors.position ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.position}</span> : null}</label>
                 <label><FieldLabel required>Years of Experience</FieldLabel><input type="number" min="0" max="60" step="1" value={form.yearsOfExperience} onChange={(event) => setForm((current) => ({ ...current, yearsOfExperience: event.target.value === "" ? 0 : Number(event.target.value) }))} placeholder="e.g. 5" className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.yearsOfExperience ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} /><span className="mt-1 block text-[10px] text-slate-400">Total professional working experience in years.</span>{formErrors.yearsOfExperience ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.yearsOfExperience}</span> : null}</label>
                 <label><FieldLabel required>System role</FieldLabel><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as SystemRole }))} className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.role ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`}>{SYSTEM_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select><span className="mt-1 block text-[10px] text-slate-400">Controls application permissions.</span>{formErrors.role ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.role}</span> : null}</label>
               </div>
