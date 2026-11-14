@@ -188,6 +188,31 @@ describe('US02 user management (e2e)', () => {
     createdEmails.length = 0;
   });
 
+  it('removes projects owned by a user when their account is deleted', async () => {
+    const { user } = await createUser();
+    const project = await prisma.project.create({
+      data: {
+        name: 'US02 deletion cascade test',
+        description: 'Verifies owned projects are removed with their owner.',
+        startDate: new Date('2026-11-01T00:00:00.000Z'),
+        endDate: new Date('2026-12-01T00:00:00.000Z'),
+        budget: 5000,
+        ownerId: user.id,
+      },
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/users/${user.id}`)
+      .set('Cookie', adminCookie)
+      .set(CSRF)
+      .expect(204);
+
+    expect(
+      await prisma.project.findUnique({ where: { id: project.id } }),
+    ).toBeNull();
+    createdEmails.length = 0;
+  });
+
   it('rejects duplicate emails and requests without an admin session', async () => {
     const { input } = await createUser();
     await request(app.getHttpServer())
