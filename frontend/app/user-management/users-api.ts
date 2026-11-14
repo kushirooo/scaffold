@@ -1,8 +1,6 @@
 
 import type {
   AccountStatus,
-  CreateUserResult,
-  EmailDeliveryStatus,
   UserInput,
   UserRecord,
 } from "./user-types";
@@ -20,7 +18,7 @@ export class ApiError extends Error {
 }
 
 const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"
 ).replace(/\/+$/, "");
 
 export const IS_DEMO_MODE =
@@ -105,16 +103,6 @@ function normalizeUser(value: unknown): UserRecord {
   };
 }
 
-function normalizeEmailStatus(
-  value: unknown
-): EmailDeliveryStatus {
-  const status = String(value ?? "pending").toLowerCase();
-
-  return status === "sent" || status === "failed"
-    ? status
-    : "pending";
-}
-
 async function request<T>(
   path: string,
   init: RequestInit = {}
@@ -127,6 +115,9 @@ async function request<T>(
       credentials: "include",
       headers: {
         Accept: "application/json",
+        ...(init.method && init.method.toUpperCase() !== "GET"
+          ? { "X-MARS-CSRF": "1" }
+          : {}),
         ...(init.body && !(init.body instanceof FormData)
           ? { "Content-Type": "application/json" }
           : {}),
@@ -209,21 +200,25 @@ export async function getUsers(): Promise<{
   };
 }
 
-// CREATE USER + US18 WELCOME EMAIL
+// CREATE USER
 
 export async function createUser(
   input: UserInput
-): Promise<CreateUserResult> {
+): Promise<{ user: UserRecord }> {
   if (IS_DEMO_MODE) {
     return preventDemoWrite();
   }
 
   // File upload must be supported by the NestJS API
   // before profilePicture can be permanently stored.
-  const {
-    profilePicture,
-    ...userData
-  } = input;
+  const userData = {
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    position: input.position,
+    yearsOfExperience: input.yearsOfExperience,
+    role: input.role,
+  };
 
   const response = await request<unknown>("/users", {
     method: "POST",
@@ -253,18 +248,8 @@ export async function createUser(
     );
   }
 
-  const emailSource = asObject(
-    raw.welcomeEmail ??
-    raw.email ??
-    raw.emailDelivery
-  );
-
-  const statusSource =
-    emailSource.status ?? raw.welcomeEmailStatus;
-
   return {
     user: normalizeUser(userSource),
-    welcomeEmailStatus: normalizeEmailStatus(statusSource),
   };
 }
 
@@ -278,10 +263,13 @@ export async function updateUser(
     return preventDemoWrite();
   }
 
-  const {
-    profilePicture,
-    ...userData
-  } = input;
+  const userData = {
+    name: input.name,
+    email: input.email,
+    position: input.position,
+    yearsOfExperience: input.yearsOfExperience,
+    role: input.role,
+  };
 
   await request<unknown>(
     `/users/${encodeURIComponent(id)}`,
@@ -325,36 +313,5 @@ export async function deleteUser(
     {
       method: "DELETE",
     }
-  );
-}
-
-// US18 RESEND WELCOME EMAIL
-// This endpoint resends email only.
-// It does not create another user account.
-
-export async function resendWelcomeEmail(
-  id: string
-): Promise<EmailDeliveryStatus> {
-  if (IS_DEMO_MODE) {
-    return "pending";
-  }
-
-  const response = await request<unknown>(
-    `/users/${encodeURIComponent(id)}/welcome-email/resend`,
-    {
-      method: "POST",
-    }
-  );
-
-  const raw = asObject(response);
-
-  const emailSource = asObject(
-    raw.welcomeEmail ??
-    raw.email ??
-    raw.emailDelivery
-  );
-
-  return normalizeEmailStatus(
-    emailSource.status ?? raw.status
   );
 }

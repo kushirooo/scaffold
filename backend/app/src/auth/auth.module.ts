@@ -66,6 +66,6 @@ const JWT_AUDIENCE = 'raf-consult-portal';
   ],
   // ProjectsModule applies JwtAuthGuard on its controllers. Re-exporting the
   // configured JwtModule keeps JwtService available in that module context.
-  exports: [AuthService, JwtAuthGuard, ResetTokenService, JwtModule],
+  exports: [AuthService, JwtAuthGuard, ResetTokenService, PasswordHasher, JwtModule],
 })
 export class AuthModule {}
