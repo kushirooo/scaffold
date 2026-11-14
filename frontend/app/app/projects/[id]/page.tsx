@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Project, ProjectRole, User } from '@/types/project';
+import { Project, ProjectAssignableUser, ProjectRole } from '@/types/project';
 import {
   fetchProject,
-  fetchSystemUsers,
+  fetchAssignableWorkers,
   assignProjectMember,
   removeProjectMember,
 } from '@/services/projectService';
+import { formatCurrency } from '@/lib/projects';
 
 export default function ProjectDetailsPage({
   params,
@@ -17,7 +18,7 @@ export default function ProjectDetailsPage({
 }) {
   const [projectId, setProjectId] = useState<string>('');
   const [project, setProject] = useState<Project | null>(null);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<ProjectAssignableUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<ProjectRole>('Member');
   const [loading, setLoading] = useState<boolean>(true);
@@ -44,7 +45,7 @@ export default function ProjectDetailsPage({
         setErrorMessage(null);
         setProject(current);
         try {
-          const users = await fetchSystemUsers();
+          const users = await fetchAssignableWorkers();
           if (!cancelled) setAvailableUsers(users);
         } catch (err) {
           if (!cancelled) {
@@ -77,7 +78,7 @@ export default function ProjectDetailsPage({
     try {
       const newMember = await assignProjectMember(project.id, selectedUserId, selectedRole);
       setProject((current) => current
-        ? { ...current, members: [...(current.members || []), newMember] }
+        ? { ...current, members: [...current.members, newMember] }
         : current);
 
       const assignedUser = availableUsers.find((u) => u.id === selectedUserId);
@@ -99,7 +100,7 @@ export default function ProjectDetailsPage({
     try {
       await removeProjectMember(project.id, userId);
       setProject((current) => current
-        ? { ...current, members: current.members?.filter((member) => member.userId !== userId) }
+        ? { ...current, members: current.members.filter((member) => member.userId !== userId) }
         : current);
       setNotification('Worker removed from this project. Their other project assignments are unchanged.');
     } catch (err) {
@@ -111,7 +112,7 @@ export default function ProjectDetailsPage({
   };
 
   const unassignedUsers = availableUsers.filter(
-    (user) => !project?.members?.some((member) => member.userId === user.id),
+    (user) => !project?.members.some((member) => member.userId === user.id),
   );
 
   if (loading) {
@@ -122,7 +123,7 @@ export default function ProjectDetailsPage({
     return (
       <div className="p-8 text-center text-slate-500">
         <p role={errorMessage ? 'alert' : undefined}>{errorMessage ?? 'Project not found.'}</p>
-        <Link href="/projects" className="text-[#08086F] underline mt-2 inline-block">
+        <Link href="/projects" className="text-brand-navy underline mt-2 inline-block">
           Back to Projects
         </Link>
       </div>
@@ -130,7 +131,7 @@ export default function ProjectDetailsPage({
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto font-sans" style={{ minHeight: '100vh', backgroundColor: '#F5F7FF' }}>
+    <div className="p-8 max-w-6xl mx-auto font-sans min-h-screen bg-canvas">
       <div className="mb-6 flex justify-between items-center">
         <div>
           <span className="text-xs font-mono px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
@@ -161,7 +162,7 @@ export default function ProjectDetailsPage({
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <p className="text-xs font-mono text-slate-400 uppercase">Budget</p>
-          <p className="text-lg font-semibold text-slate-800 mt-1">${project.budget?.toLocaleString()}</p>
+          <p className="text-lg font-semibold text-slate-800 mt-1">{formatCurrency(project.budget)}</p>
         </div>
       </div>
 
@@ -202,8 +203,7 @@ export default function ProjectDetailsPage({
           <button
             type="submit"
             disabled={isAssigning || !selectedUserId}
-            className="px-5 py-2 rounded-lg text-white font-medium text-sm transition"
-            style={{ backgroundColor: '#08086F', opacity: isAssigning || !selectedUserId ? 0.6 : 1 }}
+            className="px-5 py-2 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
           >
             {isAssigning ? 'Assigning…' : 'Assign to Project'}
           </button>
@@ -219,7 +219,7 @@ export default function ProjectDetailsPage({
           <p className="mb-4 text-sm text-slate-500">No active workers are available to assign.</p>
         )}
 
-        {!project.members || project.members.length === 0 ? (
+        {project.members.length === 0 ? (
           <p className="text-sm text-slate-500 italic py-4">No team members assigned to this project yet.</p>
         ) : (
           <div className="overflow-x-auto">

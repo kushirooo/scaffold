@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProjectStatus } from '@/types/project';
 import { createProject } from '@/services/projectService';
+import { toProjectApiError, type ProjectApiError } from '@/lib/projects';
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -15,12 +16,12 @@ export default function CreateProjectPage() {
   const [budget, setBudget] = useState('');
   const [status, setStatus] = useState<ProjectStatus>('Active');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<ProjectApiError | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setErrorMessage(null);
+    setFormError(null);
 
     try {
       await createProject({
@@ -34,14 +35,14 @@ export default function CreateProjectPage() {
       router.push('/projects');
     } catch (err) {
       console.error(err);
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to create project.');
+      setFormError(toProjectApiError(err, 'Failed to create project.'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto font-sans" style={{ minHeight: '100vh', backgroundColor: '#F5F7FF' }}>
+    <div className="p-8 max-w-3xl mx-auto font-sans min-h-screen bg-canvas">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-light text-slate-900">Create New Project</h1>
@@ -53,10 +54,18 @@ export default function CreateProjectPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-        {errorMessage && (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
-            {errorMessage}
-          </p>
+        {formError && (
+          <div className="rounded-lg border border-danger/40 bg-danger-subtle p-3 text-sm text-danger-text" role="alert">
+            {formError.details.length > 0 ? (
+              <ul className="list-disc space-y-1 pl-5">
+                {formError.details.map((detail, index) => (
+                  <li key={`${index}-${detail}`}>{detail}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>{formError.message}</p>
+            )}
+          </div>
         )}
         <div>
           <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-2">Project Name</label>
@@ -66,7 +75,7 @@ export default function CreateProjectPage() {
             placeholder="e.g., Enterprise Portal Migration"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
           />
         </div>
 
@@ -78,7 +87,7 @@ export default function CreateProjectPage() {
             placeholder="Describe objectives and scope..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
           />
         </div>
 
@@ -90,7 +99,7 @@ export default function CreateProjectPage() {
               required
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             />
           </div>
 
@@ -101,7 +110,7 @@ export default function CreateProjectPage() {
               required
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             />
           </div>
         </div>
@@ -113,9 +122,10 @@ export default function CreateProjectPage() {
               type="number"
               required
               min="0"
+              step="0.01"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             />
           </div>
 
@@ -124,7 +134,7 @@ export default function CreateProjectPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             >
               <option value="Active">Active</option>
               <option value="On Hold">On Hold</option>
@@ -143,8 +153,7 @@ export default function CreateProjectPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-lg text-white font-medium text-sm transition"
-            style={{ backgroundColor: '#08086F' }}
+            className="px-6 py-2.5 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
           >
             {isSubmitting ? 'Saving...' : 'Save Project'}
           </button>

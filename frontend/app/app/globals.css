@@ -12,6 +12,23 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * DESIGN.md §2.1 colour tokens (single source of truth for the project pages).
+ * Utilities are generated from these, e.g. `bg-brand-navy`, `bg-canvas`,
+ * `text-status-completed-dot`, `bg-danger-subtle`, `border-danger`.
+ */
+@theme {
+  --color-brand-navy: #08086f; /* color-brand-navy */
+  --color-brand-navy-raised: #131375; /* color-brand-navy-raised */
+  --color-canvas: #f5f7ff; /* color-bg-canvas */
+  --color-dark-surface: #0d1630; /* color-bg-dark-surface */
+  --color-status-completed-bg: #7fcba7; /* color-status-completed-bg */
+  --color-status-completed-dot: #009951; /* color-status-completed-dot */
+  --color-danger: #ca3e3c; /* color-danger */
+  --color-danger-subtle: #fef2f2; /* color-danger-subtle */
+  --color-danger-text: #991b1b; /* color-danger-text */
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
