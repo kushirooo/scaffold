@@ -10,7 +10,15 @@ import {
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/components/session-provider';
 import UserToast, { type UserToastState } from '@/components/users/user-toast';
-import { classifyUserApiError, mergeUserRecord, roleLabel } from '@/lib/user-admin';
+import {
+  classifyUserApiError,
+  createUserToast,
+  mergeUserRecord,
+  resendFailureToast,
+  resendSuccessToast,
+  roleLabel,
+  toWelcomeToast,
+} from '@/lib/user-admin';
 import {
   createUser,
   deleteUser,
@@ -319,15 +327,7 @@ export function UserManagementDashboard() {
         setUsers((current) => [created, ...current]);
         setForm(EMPTY_FORM);
         setDialog(null);
-        showToast({
-          kind: 'success',
-          title: 'User created.',
-          message: `${created.name}'s account is ready. A welcome email with an activation link is being sent to ${created.email} asynchronously — it may take a moment. Use Resend if it does not arrive.`,
-          retry: {
-            label: 'Resend welcome email',
-            run: () => handleResend(created),
-          },
-        });
+        showToast(toWelcomeToast(createUserToast(created), () => handleResend(created)));
       }
     } catch (error) {
       const failure = classifyUserApiError(error);
@@ -384,37 +384,14 @@ export function UserManagementDashboard() {
     setResendingId(target.id);
     try {
       await resendWelcomeEmail(target.id);
-      showToast({
-        kind: 'success',
-        title: 'Welcome email sent.',
-        message: `A fresh activation link was emailed to ${target.email}.`,
-      });
+      showToast(toWelcomeToast(resendSuccessToast(target)));
     } catch (error) {
       const failure = classifyUserApiError(error);
       if (failure.kind === 'unauthorized') {
         redirectToLogin();
         return;
       }
-      if (failure.kind === 'welcome-email-failed') {
-        showToast({
-          kind: 'error',
-          title: 'Welcome email not sent.',
-          message: failure.message,
-          retry: { label: 'Retry resend', run: () => handleResend(target) },
-        });
-      } else if (failure.kind === 'user-inactive') {
-        showToast({
-          kind: 'error',
-          title: 'Cannot resend for an inactive account.',
-          message: failure.message,
-        });
-      } else {
-        showToast({
-          kind: 'error',
-          title: 'Unable to resend the welcome email.',
-          message: failure.message,
-        });
-      }
+      showToast(toWelcomeToast(resendFailureToast(failure), () => handleResend(target)));
     } finally {
       setResendingId(null);
     }

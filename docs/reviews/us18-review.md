@@ -30,3 +30,26 @@ Non-blocking (informational, no branch change required):
 - `git branch --show-current` → `feat/us18-welcome-email` before and after; tree clean.
 - `npx vitest run src/accounts src/email src/config --reporter=dot` → 12 files, 76/76 pass (targeted only; full suite/DB/e2e not re-run — T5b evidence and CI cover them).
 - Lead integration edits accounted for, not defects: repository comment now states invalidation order (not concurrency safety); e2e harness forces `EMAIL_TRANSPORT=memory`.
+
+## 2026-11-15 — STAB-US18 adversarial review (task-2, kanban k340)
+
+| Field | Value |
+|---|---|
+| Tree reviewed | `stabilize/stab-us18` working tree vs `b064367` (uncommitted; Lead owns the commit) |
+| Files | `frontend/app/lib/user-admin.{ts,test.mjs}`, `frontend/app/components/users/user-management-dashboard.tsx`, `docs/qa/{verification-us18,ac-matrix}.md`, `README.md` |
+| Checks | read-only `git diff`/`status` + scoped source/doc read; Lead evidence logs/artifacts re-read; no suite re-run; no source edited |
+| **Verdict** | **PASS WITH CHANGES** — 1 MINOR, 2 NIT; nothing blocking |
+
+Findings (order = severity):
+
+1. `frontend/app/components/users/user-management-dashboard.tsx:196-210,345,402,409` — **MINOR** — the AC's "toast/result is tied to the real send path" is proven only by the Lead's browser smoke: `frontend/app/lib/user-admin.test.mjs:191-246` exercises the copy helpers, so reverting the call sites (inline literals, or dropping the Resend retry) keeps `npm test` green. Fix: move the copy→toast adapter (`showToastCopy`, retry only when `actionLabel` + handler) into `lib/user-admin.ts` and add node:test cases that create keeps its Resend action and resend success has none.
+
+2. `frontend/app/lib/user-admin.test.mjs:208,218,231` — **NIT** — the "no delivery claim" guards only ban the literal word `delivered`, and the resend-success test never asserts the positive "was sent to" wording, so an edit to "received"/"in your inbox" would stay green. Fix: assert `/was sent to/` in the resend-success test and widen the negative pattern to e.g. `/(delivered|received|inbox)/i` on both success copies.
+
+3. `docs/qa/ac-matrix.md:39` — **NIT** — the AC3 evidence command omits the `cd backend/app &&` prefix used on the AC1 row (`:37`), so it is not copy-pasteable from the repo root. Fix: add the prefix.
+
+No findings on: token/password/cookie exposure (toast copy carries name + email only, no link/token; no log or response change); guard/session/tokenVersion, CSRF and cookie items are N/A (no auth or route change); test honesty (copy asserted as data, not call-count mocks; positive assertions would fail on overclaim — the coverage gap is findings 1/2); `[OPEN-1]` stated as pending SM amendment with literal AC2 explicitly not claimed (`verification-us18.md:18,60`, `ac-matrix.md:14,38`); staging/Resend remain DEFERRED (`verification-us18.md:6,60`, `ac-matrix.md:33,37,107`, README); scope (`git status` shows only the six card paths, no schema/dependency/contract change).
+
+Lead evidence claims checked and supported: 13/26 frontend test counts, cited e2e test titles, smoke 11/11 (`artifacts/stabilization/100-stab-us18-smoke.log`, production build, 0 console errors, real resend 200 + honest toast), Mailtrap probe `250 Ok: queued` with activation link and no dev password, app-flow 201/200 with hash-only INVITE and 0 failure markers; "no inbox claim" is accurate — no delivery claim is made anywhere.
+
+Verdict: PASS WITH CHANGES
