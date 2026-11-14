@@ -1,0 +1,113 @@
+### RAF CONSULT MARS — Sprint 1 HTTP smoke flow (US01 + US18/US19)
+#
+# Run this file in a client with a cookie jar. The JetBrains HTTP Client keeps
+# cookies per host automatically; in other clients enable/persist cookies. The
+# access token is httpOnly: there is no bearer header, and the login/reset/change
+# response bodies never contain a token.
+#
+# Flow: login -> me -> forgot-password -> reset-password -> login (new password)
+#       -> change-password -> me -> logout. The reset revokes every session, so the
+#       cookie from step 1 is dead by step 5: log in again with the new password.
+#
+# Local API: `npm run start:dev` in backend/app (http://localhost:4000).
+# Reset email: with EMAIL_TRANSPORT=smtp and Mailtrap configured (see
+# backend/app/.env.example), open the Mailtrap inbox, open the
+# "Reset your RAF CONSULT MARS password" message, copy the raw token from the
+# ?token= query parameter of the reset link and paste it into @resetToken below.
+# With EMAIL_TRANSPORT=memory no mail leaves the process — use Mailtrap for manual runs.
+# NEVER commit a real token or JWT: this file is a template, not a secret store.
+#
+# Every non-GET request requires `X-MARS-CSRF: 1`. Browser code must also send
+# `credentials: 'include'`; see docs/api-contract-us18-us19.md §6.
+
+@baseUrl = http://localhost:4000
+@csrf = 1
+@email = pm@rafconsult.test
+@password = RafConsult!2026
+@newPassword = A brand new passphrase 2026
+@changedPassword = Another rotated passphrase 2026
+# Paste the 43-character raw token from the forgot-password email (base64url).
+@resetToken = paste-raw-token-from-reset-email-here
+
+### 1. login — sets the httpOnly mars_at cookie; no token in the body
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+X-MARS-CSRF: {{csrf}}
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 2. me — proves the cookie jar is authenticated
+GET {{baseUrl}}/auth/me
+
+### 3. forgot-password — always 204 for a valid email (known, unknown, inactive, invited)
+POST {{baseUrl}}/auth/forgot-password
+Content-Type: application/json
+X-MARS-CSRF: {{csrf}}
+
+{
+  "email": "{{email}}"
+}
+
+### 4. reset-password — 200 with an empty body, no Set-Cookie (no auto-login)
+# Any expired/used/unknown/inactive link returns the same generic 400:
+#   {"message":"This password reset link is invalid or has expired."}
+# A policy failure returns 400 with the policy message and does not consume the link.
+# Copy the Mailtrap token into @resetToken before sending this request.
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+X-MARS-CSRF: {{csrf}}
+
+{
+  "token": "{{resetToken}}",
+  "newPassword": "{{newPassword}}"
+}
+
+### 5. login again — the reset revoked every session, so step 1's cookie is dead
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+X-MARS-CSRF: {{csrf}}
+
+{
+  "email": "{{email}}",
+  "password": "{{newPassword}}"
+}
+
+### 6. change-password — rotates mars_at; 200 {user, expiresIn}, no token in the body
+# Wrong currentPassword -> 401 {"message":"Invalid email or password"}; the
+# previous cookie and a second device's cookie are rejected afterwards.
+POST {{baseUrl}}/auth/change-password
+Content-Type: application/json
+X-MARS-CSRF: {{csrf}}
+
+{
+  "currentPassword": "{{newPassword}}",
+  "newPassword": "{{changedPassword}}"
+}
+
+### 7. me — the rotated cookie works
+GET {{baseUrl}}/auth/me
+
+### 8. logout — 204 and clears the cookie; the rotated cookie is dead afterwards
+POST {{baseUrl}}/auth/logout
+X-MARS-CSRF: {{csrf}}
+
+### 9. Negative: login with the old password after step 6 — expect 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+X-MARS-CSRF: {{csrf}}
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 10. Negative: forgot-password without the CSRF header — expect 403
+POST {{baseUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
