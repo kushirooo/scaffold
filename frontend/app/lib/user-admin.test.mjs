@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   classifyUserApiError,
+  createUserToast,
   isAdminRole,
   mapUserRecord,
   mapUsersResponse,
   mergeUserRecord,
   normalizeRole,
   normalizeStatus,
+  resendFailureToast,
+  resendSuccessToast,
   roleLabel,
   statusValue,
+  toWelcomeToast,
 } from './user-admin.ts';
 
 test('admin gate accepts the API enum and the UI label only', () => {
@@ -183,4 +187,96 @@ test('classifies auth and unknown failures and supplies fallback messages', () =
     message: 'The welcome email could not be sent. Please retry the resend.',
   });
   assert.equal(classifyUserApiError(undefined).message, 'Something went wrong. Please try again.');
+});
+
+test('create toast says the welcome email is sent asynchronously and offers Resend', () => {
+  const copy = createUserToast({
+    name: 'Aisyah Rahman',
+    email: 'aisyah@rafconsult.test',
+  });
+
+  assert.equal(copy.kind, 'success');
+  assert.equal(copy.title, 'User created.');
+  assert.equal(copy.actionLabel, 'Resend welcome email');
+  assert.match(copy.message, /being sent .* asynchronously/);
+  assert.match(copy.message, /aisyah@rafconsult\.test/);
+  assert.match(copy.message, /Aisyah Rahman/);
+  assert.match(copy.message, /Resend/);
+});
+
+test('create toast never claims the email was delivered', () => {
+  const copy = createUserToast({ name: 'Aisyah Rahman', email: 'a@rafconsult.test' });
+  assert.doesNotMatch(`${copy.title} ${copy.message}`, /(delivered|received|inbox)/i);
+});
+
+test('resend success names the recipient and does not claim delivery', () => {
+  const copy = resendSuccessToast({ email: 'worker@rafconsult.test' });
+
+  assert.equal(copy.kind, 'success');
+  assert.equal(copy.title, 'Welcome email sent.');
+  assert.match(copy.message, /was sent to worker@rafconsult\.test/);
+  assert.equal(copy.actionLabel, undefined);
+  assert.doesNotMatch(`${copy.title} ${copy.message}`, /(delivered|received|inbox)/i);
+});
+
+test('resend failure keeps the cause and only a failed send offers Retry', () => {
+  const failedSend = resendFailureToast({
+    kind: 'welcome-email-failed',
+    message:
+      'The welcome email could not be sent. The previous activation link is no longer valid; retry the resend.',
+  });
+  assert.equal(failedSend.kind, 'error');
+  assert.equal(failedSend.title, 'Welcome email not sent.');
+  assert.equal(failedSend.actionLabel, 'Retry resend');
+  assert.match(failedSend.message, /retry the resend/);
+  assert.doesNotMatch(`${failedSend.title} ${failedSend.message}`, /(delivered|received|inbox)/i);
+
+  const inactive = resendFailureToast({
+    kind: 'user-inactive',
+    message: 'This account is inactive. Reactivate it before resending the welcome email.',
+  });
+  assert.equal(inactive.title, 'Cannot resend for an inactive account.');
+  assert.equal(inactive.actionLabel, undefined);
+  assert.match(inactive.message, /inactive/);
+
+  const other = resendFailureToast({
+    kind: 'generic',
+    message: 'Something went wrong. Please try again.',
+  });
+  assert.equal(other.title, 'Unable to resend the welcome email.');
+  assert.equal(other.actionLabel, undefined);
+});
+
+test('toWelcomeToast attaches the copy action label and handler as the retry action', () => {
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+  };
+  const copy = createUserToast({ name: 'Aisyah Rahman', email: 'aisyah@rafconsult.test' });
+  const toast = toWelcomeToast(copy, run);
+
+  assert.equal(toast.kind, 'success');
+  assert.equal(toast.title, copy.title);
+  assert.equal(toast.message, copy.message);
+  assert.equal(toast.retry.label, 'Resend welcome email');
+  assert.equal(toast.retry.run, run);
+  toast.retry.run();
+  assert.equal(calls, 1);
+
+  const retryCopy = resendFailureToast({
+    kind: 'welcome-email-failed',
+    message: 'The welcome email could not be sent.',
+  });
+  assert.equal(toWelcomeToast(retryCopy, run).retry.label, 'Retry resend');
+});
+
+test('toWelcomeToast never invents a retry action', () => {
+  const successCopy = resendSuccessToast({ email: 'worker@rafconsult.test' });
+  assert.equal(toWelcomeToast(successCopy, () => {}).retry, undefined);
+  assert.equal(toWelcomeToast(successCopy).retry, undefined);
+
+  // An action label without a handler stays non-interactive rather than throwing.
+  const resendCopy = createUserToast({ name: 'Aisyah Rahman', email: 'a@rafconsult.test' });
+  assert.equal(resendCopy.actionLabel, 'Resend welcome email');
+  assert.equal(toWelcomeToast(resendCopy).retry, undefined);
 });

@@ -9,6 +9,7 @@
 import type {
   AccountStatus,
   SystemRole,
+  ToastKind,
   UserRecord,
 } from '@/types/users';
 
@@ -187,4 +188,108 @@ export function classifyUserApiError(error: unknown): UserApiError {
   if (status === 409) return withMessage('conflict');
 
   return withMessage('generic');
+}
+
+/**
+ * Copy for a welcome-email toast. Pure data: the component owns the action
+ * handler, so the wording that describes the send path can be unit-tested
+ * without rendering React.
+ */
+export interface WelcomeToastCopy {
+  kind: ToastKind;
+  title: string;
+  message: string;
+  /** Follow-up action label (`Resend`/`Retry`); absent when there is none. */
+  actionLabel?: string;
+}
+
+/** Component-ready toast state (the toast component adds its own `id`). */
+export interface WelcomeToastNotice {
+  kind: ToastKind;
+  title: string;
+  message: string;
+  /** Retry/resend action; present only when the copy names one and a handler is supplied. */
+  retry?: { label: string; run: () => void | Promise<void> };
+}
+
+/**
+ * Adapt welcome-toast copy to the toast state the component renders. The
+ * handler is attached only when the copy carries an action label, so a copy
+ * without one can never grow an action. Pure — no React/component imports —
+ * so the component→helper wiring itself is node-testable.
+ */
+export function toWelcomeToast(
+  copy: WelcomeToastCopy,
+  run?: () => void | Promise<void>,
+): WelcomeToastNotice {
+  if (!copy.actionLabel || !run) {
+    return { kind: copy.kind, title: copy.title, message: copy.message };
+  }
+  return {
+    kind: copy.kind,
+    title: copy.title,
+    message: copy.message,
+    retry: { label: copy.actionLabel, run },
+  };
+}
+
+/**
+ * Create-success toast. `POST /users` returns `201` once the account is
+ * committed and the welcome email is queued asynchronously, so the copy must
+ * never imply delivery: it says the email is being sent asynchronously and
+ * offers Resend for recovery (`docs/api-contract-us02.md` §3–§4).
+ */
+export function createUserToast(
+  user: Pick<UserRecord, 'name' | 'email'>,
+): WelcomeToastCopy {
+  return {
+    kind: 'success',
+    title: 'User created.',
+    message: `${user.name}'s account is ready. A welcome email with an activation link is being sent to ${user.email} asynchronously — it may take a moment. Use Resend if it does not arrive.`,
+    actionLabel: 'Resend welcome email',
+  };
+}
+
+/**
+ * Resend-success toast. The resend route calls the US18 handler directly and
+ * only answers `200 { status: "sent" }` when the send resolved, so "sent to
+ * <recipient>" is the strongest honest claim; delivery is not claimed.
+ */
+export function resendSuccessToast(
+  user: Pick<UserRecord, 'email'>,
+): WelcomeToastCopy {
+  return {
+    kind: 'success',
+    title: 'Welcome email sent.',
+    message: `A fresh activation link was sent to ${user.email}.`,
+  };
+}
+
+/**
+ * Resend-failure toast. Only a failed send offers Retry (`502` re-issues a
+ * fresh link); an inactive account and unknown failures have no retry action.
+ */
+export function resendFailureToast(
+  failure: Pick<UserApiError, 'kind' | 'message'>,
+): WelcomeToastCopy {
+  if (failure.kind === 'welcome-email-failed') {
+    return {
+      kind: 'error',
+      title: 'Welcome email not sent.',
+      message: failure.message,
+      actionLabel: 'Retry resend',
+    };
+  }
+  if (failure.kind === 'user-inactive') {
+    return {
+      kind: 'error',
+      title: 'Cannot resend for an inactive account.',
+      message: failure.message,
+    };
+  }
+  return {
+    kind: 'error',
+    title: 'Unable to resend the welcome email.',
+    message: failure.message,
+  };
 }
