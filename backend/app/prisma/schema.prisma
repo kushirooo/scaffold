@@ -23,6 +23,24 @@ enum ResetTokenPurpose {
   RESET
 }
 
+enum ProjectLifecycleStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+
+  @@map("ProjectStatus")
+}
+
+enum ProjectMemberRole {
+  OWNER
+  MEMBER
+  CONTRIBUTOR
+}
+
+enum NotificationType {
+  PROJECT_ASSIGNED
+}
+
 model User {
   id                String   @id @default(uuid()) @db.Uuid
   email             String   @unique
@@ -35,9 +53,12 @@ model User {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  credential  Credential?
-  sessions    Session[]
-  resetTokens PasswordResetToken[]
+  credential         Credential?
+  sessions           Session[]
+  resetTokens        PasswordResetToken[]
+  ownedProjects      Project[]            @relation("ProjectOwner")
+  projectMemberships ProjectMember[]
+  notifications      Notification[]
 
   @@index([role])
   @@map("users")
@@ -78,4 +99,58 @@ model PasswordResetToken {
   @@index([userId, purpose])
   @@index([expiresAt])
   @@map("password_reset_tokens")
+}
+
+model Project {
+  id          String                 @id @default(uuid()) @db.Uuid
+  name        String
+  description String                 @db.Text
+  startDate   DateTime               @map("start_date") @db.Date
+  endDate     DateTime               @map("end_date") @db.Date
+  budget      Decimal                @db.Decimal(14, 2)
+  status      ProjectLifecycleStatus @default(ACTIVE)
+  ownerId     String                 @map("owner_id") @db.Uuid
+  isArchived  Boolean                @default(false) @map("is_archived")
+  archivedAt  DateTime?              @map("archived_at") @db.Timestamptz(6)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       ProjectMember[]
+  notifications Notification[]
+
+  @@index([ownerId, isArchived, updatedAt])
+  @@index([isArchived, archivedAt])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String            @map("project_id") @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  role      ProjectMemberRole @default(MEMBER)
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  projectId String           @map("project_id") @db.Uuid
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

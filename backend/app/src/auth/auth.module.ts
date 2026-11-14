@@ -45,6 +45,8 @@ const JWT_AUDIENCE = 'raf-consult-portal';
     { provide: USERS_REPOSITORY, useClass: PrismaUsersRepository },
     { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },
   ],
+  // ProjectsModule applies JwtAuthGuard on its controllers. Re-exporting the
+  // configured JwtModule keeps JwtService available in that module context.
   exports: [AuthService, JwtAuthGuard, PasswordHasher, JwtModule],
 })
 export class AuthModule {}
