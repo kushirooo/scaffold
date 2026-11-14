@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/navigation.test.mjs lib/user-admin.test.mjs"
+    "test": "node --test lib/navigation.test.mjs lib/user-admin.test.mjs lib/projects.test.mjs"
   },
   "dependencies": {
     "next": "16.4.5",

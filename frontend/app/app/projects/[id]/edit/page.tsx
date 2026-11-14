@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProjectStatus } from '@/types/project';
 import { fetchProject, updateProject } from '@/services/projectService';
+import { toProjectApiError, type ProjectApiError } from '@/lib/projects';
 
 export default function EditProjectPage({
   params,
@@ -21,7 +22,8 @@ export default function EditProjectPage({
   const [status, setStatus] = useState<ProjectStatus>('Active');
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<ProjectApiError | null>(null);
 
   useEffect(() => {
     Promise.resolve(params).then((resolvedParams) => {
@@ -37,17 +39,17 @@ export default function EditProjectPage({
       try {
         const current = await fetchProject(projectId);
         if (cancelled) return;
-        setErrorMessage(null);
+        setLoadError(null);
         setName(current.name);
         setDescription(current.description);
-        setStartDate(current.startDate || '');
-        setEndDate(current.endDate || '');
-        setBudget(current.budget?.toString() ?? '');
+        setStartDate(current.startDate);
+        setEndDate(current.endDate);
+        setBudget(String(current.budget));
         setStatus(current.status);
       } catch (err) {
         console.error(err);
         if (!cancelled) {
-          setErrorMessage(err instanceof Error ? err.message : 'Unable to load project.');
+          setLoadError(err instanceof Error ? err.message : 'Unable to load project.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -63,7 +65,7 @@ export default function EditProjectPage({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setErrorMessage(null);
+    setFormError(null);
 
     try {
       await updateProject(projectId, {
@@ -77,7 +79,7 @@ export default function EditProjectPage({
       router.push('/projects');
     } catch (err) {
       console.error(err);
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to update project.');
+      setFormError(toProjectApiError(err, 'Failed to update project.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -87,11 +89,11 @@ export default function EditProjectPage({
     return <div className="p-8 text-center text-slate-500">Loading project details...</div>;
   }
 
-  if (errorMessage && !name) {
+  if (loadError && !name) {
     return (
       <main className="p-8 text-center text-slate-700" role="alert">
-        <p>{errorMessage}</p>
-        <Link href="/projects" className="mt-3 inline-block text-[#08086F] underline">
+        <p>{loadError}</p>
+        <Link href="/projects" className="mt-3 inline-block text-brand-navy underline">
           Back to Projects
         </Link>
       </main>
@@ -99,7 +101,7 @@ export default function EditProjectPage({
   }
 
   return (
-    <div className="p-8 max-w-3xl mx-auto font-sans" style={{ minHeight: '100vh', backgroundColor: '#F5F7FF' }}>
+    <div className="p-8 max-w-3xl mx-auto font-sans min-h-screen bg-canvas">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-light text-slate-900">Edit Project</h1>
@@ -111,10 +113,18 @@ export default function EditProjectPage({
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-        {errorMessage && (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
-            {errorMessage}
-          </p>
+        {formError && (
+          <div className="rounded-lg border border-danger/40 bg-danger-subtle p-3 text-sm text-danger-text" role="alert">
+            {formError.details.length > 0 ? (
+              <ul className="list-disc space-y-1 pl-5">
+                {formError.details.map((detail, index) => (
+                  <li key={`${index}-${detail}`}>{detail}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>{formError.message}</p>
+            )}
+          </div>
         )}
         <div>
           <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-2">Project Name</label>
@@ -123,7 +133,7 @@ export default function EditProjectPage({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
           />
         </div>
 
@@ -134,7 +144,7 @@ export default function EditProjectPage({
             rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
           />
         </div>
 
@@ -146,7 +156,7 @@ export default function EditProjectPage({
               required
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             />
           </div>
 
@@ -157,7 +167,7 @@ export default function EditProjectPage({
               required
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             />
           </div>
         </div>
@@ -169,9 +179,10 @@ export default function EditProjectPage({
               type="number"
               required
               min="0"
+              step="0.01"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             />
           </div>
 
@@ -180,7 +191,7 @@ export default function EditProjectPage({
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#08086F]"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-navy"
             >
               <option value="Active">Active</option>
               <option value="On Hold">On Hold</option>
@@ -199,8 +210,7 @@ export default function EditProjectPage({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-lg text-white font-medium text-sm transition"
-            style={{ backgroundColor: '#08086F' }}
+            className="px-6 py-2.5 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
           >
             {isSubmitting ? 'Saving...' : 'Update Project'}
           </button>

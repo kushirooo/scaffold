@@ -1,10 +1,12 @@
 import { apiRequest } from '@/lib/api';
 import {
+  CreateProjectInput,
+  NotificationsReadAllResponse,
   Project,
   ProjectMember,
   ProjectNotification,
   ProjectRole,
-  ProjectStatus,
+  UpdateProjectInput,
   User,
 } from '@/types/project';
 
@@ -28,40 +30,38 @@ export async function fetchProjectNotifications(): Promise<ProjectNotification[]
   return apiRequest<ProjectNotification[]>('/notifications');
 }
 
-export async function createProject(data: {
-  name: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  budget: number;
-  status: ProjectStatus;
-}): Promise<Project> {
+export async function createProject(input: CreateProjectInput): Promise<Project> {
   return apiRequest<Project>('/projects', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(input),
   });
 }
 
-export async function updateProject(id: string, data: Partial<Project>): Promise<Project> {
+export async function updateProject(
+  id: string,
+  input: UpdateProjectInput,
+): Promise<Project> {
   return apiRequest<Project>(`/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(input),
   });
 }
 
-export async function softDeleteProject(id: string): Promise<void> {
-  await apiRequest<void>(`/projects/${encodeURIComponent(id)}`, {
+/** `DELETE /projects/:id` — soft archive; the API returns the archived project. */
+export async function archiveProject(id: string): Promise<Project> {
+  return apiRequest<Project>(`/projects/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }
 
-export async function restoreProject(id: string): Promise<void> {
-  await apiRequest<void>(`/projects/${encodeURIComponent(id)}/restore`, {
+/** `POST /projects/:id/restore` — only within the 30-day window, else 409. */
+export async function restoreProject(id: string): Promise<Project> {
+  return apiRequest<Project>(`/projects/${encodeURIComponent(id)}/restore`, {
     method: 'POST',
   });
 }
 
-export async function fetchSystemUsers(): Promise<User[]> {
+export async function fetchAssignableWorkers(): Promise<User[]> {
   return apiRequest<User[]>('/projects/assignable-workers');
 }
 
@@ -77,4 +77,19 @@ export async function removeProjectMember(projectId: string, userId: string): Pr
     `/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
     { method: 'DELETE' },
   );
+}
+
+/** `PATCH /notifications/:id/read` — caller-scoped, idempotent. */
+export async function markNotificationRead(id: string): Promise<ProjectNotification> {
+  return apiRequest<ProjectNotification>(
+    `/notifications/${encodeURIComponent(id)}/read`,
+    { method: 'PATCH' },
+  );
+}
+
+/** `POST /notifications/read-all` — counts only the caller's unread rows. */
+export async function markAllNotificationsRead(): Promise<NotificationsReadAllResponse> {
+  return apiRequest<NotificationsReadAllResponse>('/notifications/read-all', {
+    method: 'POST',
+  });
 }
