@@ -1,8 +1,11 @@
 import { MARS_NAVY, type RenderedEmail } from './render.js';
 import {
   ADMIN_ALERT_SUBJECT_PREFIX,
+  RESET_EMAIL_FAILED_SUBJECT_PREFIX,
   type AdminAlertEmailInput,
+  type ResetEmailAlertInput,
   renderAdminAlertEmail,
+  renderResetEmailAlert,
 } from './admin-alert.template.js';
 
 const OCCURRED_AT = new Date('2026-11-12T09:30:00.000Z');
@@ -96,5 +99,102 @@ describe('renderAdminAlertEmail', () => {
 
   it('renders the shared shell with no external assets or tracking', () => {
     assertSafeHtml(renderAdminAlertEmail(INPUT));
+  });
+});
+
+const RESET_INPUT: ResetEmailAlertInput = {
+  userId: INPUT.userId,
+  email: INPUT.email,
+  stage: 'send',
+  errorName: 'EmailSendError',
+  errorMessage: 'Resend rejected the message with status 422',
+  occurredAt: OCCURRED_AT,
+};
+
+describe('renderResetEmailAlert', () => {
+  it('names the failed recipient in the exact subject shape', () => {
+    expect(renderResetEmailAlert(RESET_INPUT).subject).toBe(
+      '[MARS] Password reset email failed for member@rafconsult.test',
+    );
+    expect(RESET_EMAIL_FAILED_SUBJECT_PREFIX).toBe(
+      '[MARS] Password reset email failed for ',
+    );
+  });
+
+  it('reports the identifiers, stage, failure and timestamp in both alternatives', () => {
+    const rendered = renderResetEmailAlert({ ...RESET_INPUT, stage: 'token' });
+
+    for (const alternative of [rendered.html, rendered.text]) {
+      expect(alternative).toContain(RESET_INPUT.userId);
+      expect(alternative).toContain(RESET_INPUT.email);
+      expect(alternative).toContain('Issuing the reset token');
+      expect(alternative).toContain(RESET_INPUT.errorName);
+      expect(alternative).toContain(RESET_INPUT.errorMessage);
+      expect(alternative).toContain('2026-11-12T09:30:00.000Z');
+    }
+  });
+
+  it('labels the send stage in both alternatives', () => {
+    const rendered = renderResetEmailAlert(RESET_INPUT);
+
+    for (const alternative of [rendered.html, rendered.text]) {
+      expect(alternative).toContain('Sending the reset email');
+    }
+  });
+
+  it('states that the account exists and the link can be requested again', () => {
+    const rendered = renderResetEmailAlert(RESET_INPUT);
+
+    expect(rendered.html).toContain('The account exists');
+    expect(rendered.text).toContain('The account exists');
+    expect(rendered.text).toContain('request another one');
+  });
+
+  it('never leaks a raw token or reset URL even when passed alongside the input', () => {
+    const withSecrets = {
+      ...RESET_INPUT,
+      token: 'fake-reset-token-abc123',
+      resetUrl:
+        'https://portal.rafconsult.test/reset-password?token=fake-reset-token-abc123',
+    };
+
+    const rendered = renderResetEmailAlert(withSecrets);
+
+    for (const alternative of [
+      rendered.html,
+      rendered.text,
+      rendered.subject,
+    ]) {
+      expect(alternative).not.toContain('fake-reset-token-abc123');
+      expect(alternative).not.toContain('/reset-password?token=');
+    }
+  });
+
+  it('strips CR/LF from the email used in the subject header', () => {
+    const rendered = renderResetEmailAlert({
+      ...RESET_INPUT,
+      email: 'user@rafconsult.test\r\nBcc: evil@rafconsult.test',
+    });
+
+    expect(rendered.subject).not.toMatch(/[\r\n]/);
+    expect(rendered.subject).toBe(
+      '[MARS] Password reset email failed for user@rafconsult.test Bcc: evil@rafconsult.test',
+    );
+  });
+
+  it('escapes the email and error message in the HTML alternative', () => {
+    const rendered = renderResetEmailAlert({
+      ...RESET_INPUT,
+      email: '<script>@rafconsult.test',
+      errorMessage: '<script>alert("x")</script>',
+    });
+
+    expect(rendered.html).not.toContain('<script>');
+    expect(rendered.html).toContain('&lt;script&gt;@rafconsult.test');
+    expect(rendered.html).toContain('&lt;script&gt;alert(&quot;x&quot;)');
+  });
+
+  it('renders the shared shell with no external assets or tracking', () => {
+    assertSafeHtml(renderResetEmailAlert(RESET_INPUT));
   });
 });

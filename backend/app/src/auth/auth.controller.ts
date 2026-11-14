@@ -16,13 +16,16 @@ import {
   CurrentSessionId,
   CurrentUser,
 } from './decorators/current-user.decorator.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
+import { PasswordRecoveryService } from './password-recovery.service.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly passwordRecovery: PasswordRecoveryService,
     private readonly cookies: AuthCookies,
   ) {}
 
@@ -46,6 +49,17 @@ export class AuthController {
   ): Promise<void> {
     await this.authService.logout(sessionId);
     this.cookies.clearAccessToken(response);
+  }
+
+  /**
+   * US19: always 204, whether or not the email belongs to an active account.
+   * The service itself never throws for token/email failures, so this route
+   * cannot disclose whether an account exists.
+   */
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    await this.passwordRecovery.forgotPassword(dto.email);
   }
 
   @Get('me')

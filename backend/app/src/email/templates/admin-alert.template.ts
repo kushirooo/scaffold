@@ -83,3 +83,82 @@ export function renderAdminAlertEmail(
     }),
   };
 }
+
+/** US19: reset-token/email failures are alerted to the admins, best effort. */
+export const RESET_EMAIL_FAILED_SUBJECT_PREFIX =
+  '[MARS] Password reset email failed for ';
+
+/** Mirrors `PasswordResetStage` in `password-recovery.service.ts`. */
+export type ResetEmailAlertStage = 'token' | 'send';
+
+export interface ResetEmailAlertInput {
+  userId: string;
+  email: string;
+  stage: ResetEmailAlertStage;
+  errorName: string;
+  errorMessage: string;
+  occurredAt: Date;
+}
+
+function resetStageLabel(stage: ResetEmailAlertStage): string {
+  return stage === 'token'
+    ? 'Issuing the reset token'
+    : 'Sending the reset email';
+}
+
+/**
+ * Best-effort admin alert for a failed US19 reset token/email. It carries
+ * identifiers and the failure only: never a password, hash, raw token or reset
+ * URL (ADR 0004). The subject is the one header built from data, so CR/LF are
+ * stripped from the email.
+ */
+export function renderResetEmailAlert(
+  input: ResetEmailAlertInput,
+): RenderedEmail {
+  const subject = `${RESET_EMAIL_FAILED_SUBJECT_PREFIX}${headerSafe(input.email)}`;
+  const occurredAt = input.occurredAt.toISOString();
+  const stage = resetStageLabel(input.stage);
+
+  const bodyHtml = [
+    renderHeading('Password reset email failed'),
+    renderParagraph(
+      'A password reset request could not be completed for an active account.',
+    ),
+    renderParagraph(
+      'The account exists and is unchanged. The reset link was not delivered; the user can request another one.',
+    ),
+    renderDetail('User ID', input.userId),
+    renderDetail('Email', input.email),
+    renderDetail('Failed stage', stage),
+    renderDetail('Error class', input.errorName),
+    renderDetail('Error message', input.errorMessage),
+    renderDetail('Occurred at', occurredAt),
+  ].join('\n');
+
+  const text = [
+    'Password reset email failed',
+    '',
+    'A password reset request could not be completed for an active account.',
+    '',
+    'The account exists and is unchanged. The reset link was not delivered; the user can request another one.',
+    '',
+    `User ID: ${input.userId}`,
+    `Email: ${input.email}`,
+    `Failed stage: ${stage}`,
+    `Error class: ${input.errorName}`,
+    `Error message: ${input.errorMessage}`,
+    `Occurred at: ${occurredAt}`,
+    '',
+    renderTextFooter(),
+    '',
+  ].join('\n');
+
+  return {
+    subject,
+    text,
+    html: renderLayout({
+      title: subject,
+      bodyHtml,
+    }),
+  };
+}
