@@ -1,9 +1,18 @@
+import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  ACCOUNT_CREATED,
+  type AccountCreatedPayload,
+} from '../accounts/account-events.js';
+import { WelcomeEmailService } from '../accounts/welcome-email.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PasswordHasher } from '../auth/password-hasher.js';
 import { ROLE_PERMISSIONS, roleLabel } from './user-permissions.js';
@@ -55,6 +64,8 @@ export class UserManagementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordHasher: PasswordHasher,
+    private readonly events: EventEmitter2,
+    private readonly welcome: WelcomeEmailService,
   ) {}
 
   async listUsers() {
@@ -80,8 +91,29 @@ export class UserManagementService {
 
   async createUser(input: CreateManagedUserDto) {
     const passwordHash = await this.passwordHasher.hash(input.password);
+    const user = await this.createUserRecord(input, passwordHash);
+
+    // US18 seam: emitted after the create committed and outside the DB error
+    // mapping, so a synchronous emitter throw cannot turn the committed create
+    // into a 500 (the async listener owns every welcome-email failure).
+    this.events.emit(ACCOUNT_CREATED, {
+      userId: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      occurredAt: new Date(),
+      correlationId: randomUUID(),
+    } satisfies AccountCreatedPayload);
+
+    return { user: toPublicUser(user) };
+  }
+
+  private async createUserRecord(
+    input: CreateManagedUserDto,
+    passwordHash: string,
+  ) {
     try {
-      const user = await this.prisma.user.create({
+      return await this.prisma.user.create({
         data: {
           email: input.email,
           fullName: input.name,
@@ -96,7 +128,6 @@ export class UserManagementService {
           },
         },
       });
-      return { user: toPublicUser(user) };
     } catch (error) {
       if (isUniqueEmailError(error)) {
         throw new ConflictException({
@@ -106,6 +137,49 @@ export class UserManagementService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Re-issues the US18 welcome email for an existing account. The handler is
+   * called directly (not through the event) so the admin gets a deterministic
+   * result; re-issuing replaces any previous unused INVITE token.
+   */
+  async resendWelcomeEmail(id: string): Promise<{ status: 'sent' }> {
+    const existing = await this.findUser(id);
+    if (!existing.isActive) {
+      // An INVITE link cannot activate a deactivated account, so send nothing.
+      throw new ConflictException({
+        code: 'USER_INACTIVE',
+        message:
+          'This account is inactive. Reactivate it before resending the welcome email.',
+      });
+    }
+
+    const result = await this.welcome.handleAccountCreated({
+      userId: existing.id,
+      email: existing.email,
+      fullName: existing.fullName,
+      role: existing.role,
+      occurredAt: new Date(),
+      correlationId: randomUUID(),
+    });
+
+    if (result.status === 'failed') {
+      // issueInvite commits before the send: on stage "send" the previous
+      // activation link is already invalidated and the replacement was never
+      // delivered, so the retry path (not "nothing changed") is the message.
+      throw new HttpException(
+        {
+          code: 'WELCOME_EMAIL_FAILED',
+          message:
+            'The welcome email could not be sent. The previous activation link is no longer valid; retry the resend.',
+          stage: result.stage,
+        },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    return { status: 'sent' };
   }
 
   async updateUser(id: string, input: UpdateManagedUserDto, actor: ActingAdmin) {
@@ -197,7 +271,21 @@ export class UserManagementService {
       throw new ForbiddenException('You cannot delete your own account.');
     }
     if (existing.role === 'ADMIN') await this.ensureAnotherActiveAdmin(id);
-    await this.prisma.user.delete({ where: { id } });
+
+    // Project.owner has onDelete: Cascade, so deleting an owner would silently
+    // destroy their projects (archived ones included). One conditional delete
+    // keeps the check and the write atomic: a project created in between cannot
+    // slip past a separate count. `findUser` above already proved the row exists.
+    const { count } = await this.prisma.user.deleteMany({
+      where: { id, ownedProjects: { none: {} } },
+    });
+    if (count === 0) {
+      throw new ConflictException({
+        code: 'USER_OWNS_PROJECTS',
+        message:
+          'This user owns projects. Reassign or remove those projects before deleting the account.',
+      });
+    }
   }
 
   private async findUser(id: string) {
@@ -211,7 +299,12 @@ export class UserManagementService {
         },
       },
     });
-    if (!user) throw new NotFoundException('User not found.');
+    if (!user) {
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: 'User not found.',
+      });
+    }
     return user;
   }
 

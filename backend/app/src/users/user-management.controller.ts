@@ -60,6 +60,12 @@ export class UserManagementController {
     return this.users.updateStatus(id, input.status, actor);
   }
 
+  @Post(':id/welcome-email/resend')
+  @HttpCode(HttpStatus.OK)
+  resendWelcomeEmail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.users.resendWelcomeEmail(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteUser(
