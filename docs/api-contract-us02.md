@@ -1,8 +1,8 @@
 # US02 — User management API contract (v1)
 
 **Story:** US02 (administrator user management) · **Owner:** Backend (implementer) · **Version:** v1 (15 November 2026)
-**Status:** Implemented in `backend/app`; local lint/build/e2e green (15 Nov 2026). CI and staging checks are pending.
-**Consumers:** Portal UI (`/user-management`), Member 4 (QA), US18 (welcome email seam)
+**Status:** Implemented in `backend/app` and the portal `/users` UI; local lint/build/e2e/tests green and Lead browser smoke 23/23 (15 Nov 2026). CI and staging checks are pending.
+**Consumers:** Portal UI (`/users`; the legacy `/user-management` path 308-redirects here), Member 4 (QA), US18 (welcome email seam)
 **References:** [COLLABORATION.md](team/COLLABORATION.md), [US18/US19 contract](api-contract-us18-us19.md), [`account.created` seam](us02-seam.md), [US01 contract](api-contract-us01.md)
 
 US02 reuses the US01 cookie transport, CSRF rule, session model and error style. Every
@@ -49,7 +49,10 @@ Ordered by `created_at` descending (id ascending as tie-break).
 
 ### `GET /users/roles`
 
-Admin only. `200 OK` — the static permission matrix the UI uses to render role options:
+Admin only. `200 OK` — the server-provided permission matrix. The shipped `/users` dashboard
+renders its role list and permission table statically (`SYSTEM_ROLES`/`PERMISSIONS`) and does not
+fetch this endpoint; it exists for consumers that need the matrix from the API (e.g. a future
+role editor).
 
 ```json
 { "roles": [ { "role": "Admin", "permissions": ["projects:view", "users:manage", "roles:change", "…"] } ] }
@@ -149,11 +152,45 @@ Admin only; CSRF required. `204 No Content`, no body.
 - Re-emitting per account is avoided: one create = one email. `POST …/resend` is the only
   deliberate second send, and it is an explicit admin action.
 
-## 4. Known gaps
+## 4. UI consumption (STAB-US02 UI)
+
+The admin portal consumes this contract at `/users` (client code:
+`frontend/app/lib/users-api.ts`, mapping/error helpers `frontend/app/lib/user-admin.ts`,
+unit tests `frontend/app/lib/user-admin.test.mjs`).
+
+- **Route and access:** `/users` renders `SessionProvider → AuthGuard → AdminGuard`; a
+  non-admin session sees an "Access Denied" page (US02 AC5), and the navbar shows the Users
+  link only to `ADMIN`. The old `/user-management` route permanently redirects (HTTP 308) to
+  `/users`; no old links break.
+- **Header:** the app navbar shows the real session user (`fullName` + role label), never a
+  hardcoded administrator. The page body echoes the same session user beside the actions.
+- **List:** every §1 field is rendered (`name`, `email`, `position`, `yearsOfExperience`,
+  role label, `status`, `joinedAt`, `lastActiveAt`, with `Never` for `null`); search, role /
+  position / status filters, pagination, table and card views are client-side over one
+  `GET /users` response. The `PATCH` responses omit the sessions include, so edit/status merge
+  the response over the existing row (`mergeUserRecord`) and keep the displayed
+  `lastActiveAt` until the next full list reload.
+- **Create:** `POST /users`; on `201` the list is updated and the success toast says the
+  welcome email with the activation link is sent **asynchronously** — it may take a moment,
+  and Resend is the recovery action if it does not arrive. `409 DUPLICATE_EMAIL` stays an
+  inline email field error; no generic toast.
+- **Resend:** per-row (and resend-on-success-toast) `POST /users/:id/welcome-email/resend`.
+  `200` → success toast. `502 WELCOME_EMAIL_FAILED` → error toast with the API message and a
+  Retry action (retrying issues a fresh link; the previous one is already invalid). `409
+  USER_INACTIVE` → error toast. `401`/`403` are left to the session/guard; the dashboard
+  (`user-management-dashboard.tsx` `redirectToLogin`) sends a `401` to `/login?next=/users`.
+- **Delete:** `409 USER_OWNS_PROJECTS` surfaces the API message verbatim in an error toast
+  ("Cannot delete this user.") and the row stays; success removes the row.
+- The UI never sends `profilePicture`/FormData (the API has no upload endpoint), has no demo
+  mode (`NEXT_PUBLIC_DEMO_MODE` removed), and never stores a token: auth remains cookie-only.
+
+## 5. Known gaps
 
 - No rate limiting on `POST /users/:id/welcome-email/resend`; an admin could email-bomb a
   user's address. Same US01/US19 station as login/forgot-password throttling.
 - `POST /users` still requires a password (the schema supports invited accounts without one,
   but that flow is not exposed yet).
-- The `/user-management` UI is owned by STAB-US02 UI, not this task; this contract only
-  freezes the API it consumes.
+- An admin who wants to delete a user owning projects must reassign/remove those projects in
+  the project UI first; `/users` surfaces the policy but does not link to the project list.
+- Profile pictures and invited-account creation are not exposed anywhere; the UI no longer
+  shows an upload control for an endpoint that does not exist.

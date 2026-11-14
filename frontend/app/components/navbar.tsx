@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '@/services/authService';
+import { isAdminRole, roleLabel } from '@/lib/user-admin';
 import type { CurrentUser } from '@/types/auth';
 
 interface NavbarProps {
@@ -67,13 +68,27 @@ export default function Navbar({ user }: NavbarProps) {
                 Projects
               </Link>
             )}
+
+            {/* US02 AC5: the admin user-management route is only linked for admins. */}
+            {isAdminRole(user.role) && (
+              <Link
+                href="/users"
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  pathname === '/users' || pathname.startsWith('/users/')
+                    ? 'bg-[#08086F]/10 text-[#08086F]'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                Users
+              </Link>
+            )}
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="hidden text-right sm:block">
             <p className="text-sm font-medium text-slate-900">{user.fullName}</p>
-            <p className="font-mono text-xs text-slate-500">{user.role.replace('_', ' ')}</p>
+            <p className="text-xs text-slate-500">{roleLabel(user.role)}</p>
           </div>
 
           <button
