@@ -6,7 +6,7 @@ import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import { CSRF_HEADER } from '../src/auth/guards/csrf.guard.js';
-import { ACCESS_TOKEN_COOKIE } from '../src/auth/auth.types.js';
+import { ACCESS_TOKEN_COOKIE, MISSING_CSRF_MESSAGE } from '../src/auth/auth.types.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const PASSWORD = process.env.SEED_PASSWORD;
@@ -30,6 +30,7 @@ describe('US04 project membership (e2e)', () => {
   let projectManagerCookie: string;
   let workerCookie: string;
   let viewerCookie: string;
+  let viewerId: string;
   let projectManagerId: string;
 
   beforeAll(async () => {
@@ -63,6 +64,7 @@ describe('US04 project membership (e2e)', () => {
       .send({ email: 'viewer@rafconsult.test', password: PASSWORD })
       .expect(200);
     viewerCookie = accessCookie(viewerLogin);
+    viewerId = viewerLogin.body.user.id as string;
 
     await prisma.project.deleteMany({
       where: { ownerId: projectManagerId, name: { startsWith: 'US04 ' } },
@@ -224,6 +226,166 @@ describe('US04 project membership (e2e)', () => {
       .set(CSRF)
       .send({ userId: worker.id, projectRole: 'Not a role' })
       .expect(400);
+  });
+
+  it('marks notifications read for the caller and leaves other users untouched', async () => {
+    const users = await request(app.getHttpServer())
+      .get('/projects/assignable-workers')
+      .set('Cookie', projectManagerCookie)
+      .expect(200);
+    const worker = users.body.find(
+      (user: { email: string }) => user.email === 'worker@rafconsult.test',
+    ) as { id: string } | undefined;
+    expect(worker).toBeDefined();
+
+    const project = await createProject('US04 notification read');
+
+    await request(app.getHttpServer())
+      .post(`/projects/${project.id}/members`)
+      .set('Cookie', projectManagerCookie)
+      .set(CSRF)
+      .send({ userId: worker?.id, projectRole: 'Member' })
+      .expect(201);
+
+    // The seeded `invited@` account has no password, so the unrelated
+    // authenticated reader is the seeded viewer. Its notification row is
+    // created directly: the US04 assignment API only notifies assignable
+    // (WORKER) accounts, but GET/PATCH notifications are caller-scoped for
+    // every authenticated user.
+    await prisma.notification.create({
+      data: {
+        userId: viewerId,
+        projectId: project.id,
+        type: 'PROJECT_ASSIGNED',
+        title: 'You were assigned to a project',
+        message: `You were assigned to ${project.name} as Member.`,
+      },
+    });
+
+    const beforeRead = await request(app.getHttpServer())
+      .get('/notifications')
+      .set('Cookie', workerCookie)
+      .expect(200);
+    const unreadBefore = beforeRead.body.filter(
+      (notification: { readAt: string | null }) => notification.readAt === null,
+    ).length;
+    const own = beforeRead.body.find(
+      (notification: { projectId: string; readAt: string | null }) =>
+        notification.projectId === project.id && notification.readAt === null,
+    ) as { id: string; projectName: string } | undefined;
+    expect(own).toBeDefined();
+    expect(unreadBefore).toBeGreaterThan(0);
+
+    const firstRead = await request(app.getHttpServer())
+      .patch(`/notifications/${own?.id}/read`)
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .expect(200);
+    const readAt = firstRead.body.readAt as string;
+    expect(typeof readAt).toBe('string');
+    expect(new Date(readAt).toISOString()).toBe(readAt);
+    expect(firstRead.body).toMatchObject({
+      id: own?.id,
+      type: 'PROJECT_ASSIGNED',
+      projectId: project.id,
+      projectName: project.name,
+    });
+
+    // Idempotent: a second call keeps the first `readAt` timestamp.
+    const secondRead = await request(app.getHttpServer())
+      .patch(`/notifications/${own?.id}/read`)
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .expect(200);
+    expect(secondRead.body.readAt).toBe(readAt);
+
+    // Foreign and unknown ids are indistinguishable from a missing row.
+    await request(app.getHttpServer())
+      .patch(`/notifications/${own?.id}/read`)
+      .set('Cookie', viewerCookie)
+      .set(CSRF)
+      .expect(404)
+      .expect(({ body }) => expect(body.message).toBe('Notification not found'));
+    await request(app.getHttpServer())
+      .patch('/notifications/00000000-0000-4000-8000-000000000000/read')
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .expect(404)
+      .expect(({ body }) => expect(body.message).toBe('Notification not found'));
+
+    // Auth runs after the global CSRF guard, so the header is required first.
+    await request(app.getHttpServer())
+      .patch(`/notifications/${own?.id}/read`)
+      .set(CSRF)
+      .expect(401);
+    await request(app.getHttpServer())
+      .patch(`/notifications/${own?.id}/read`)
+      .set('Cookie', workerCookie)
+      .expect(403)
+      .expect(({ body }) => expect(body.message).toBe(MISSING_CSRF_MESSAGE));
+    await request(app.getHttpServer())
+      .post('/notifications/read-all')
+      .set(CSRF)
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/notifications/read-all')
+      .set('Cookie', workerCookie)
+      .expect(403)
+      .expect(({ body }) => expect(body.message).toBe(MISSING_CSRF_MESSAGE));
+
+    const afterMarkRead = await request(app.getHttpServer())
+      .get('/notifications')
+      .set('Cookie', workerCookie)
+      .expect(200);
+    expect(
+      afterMarkRead.body.filter(
+        (notification: { readAt: string | null }) => notification.readAt === null,
+      ),
+    ).toHaveLength(unreadBefore - 1);
+
+    const viewerBeforeReadAll = await request(app.getHttpServer())
+      .get('/notifications')
+      .set('Cookie', viewerCookie)
+      .expect(200);
+    expect(viewerBeforeReadAll.body).toContainEqual(
+      expect.objectContaining({ projectId: project.id, readAt: null }),
+    );
+
+    const readAll = await request(app.getHttpServer())
+      .post('/notifications/read-all')
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .expect(200);
+    expect(readAll.body).toEqual({ updated: unreadBefore - 1 });
+
+    const afterReadAll = await request(app.getHttpServer())
+      .get('/notifications')
+      .set('Cookie', workerCookie)
+      .expect(200);
+    expect(
+      afterReadAll.body.filter(
+        (notification: { readAt: string | null }) => notification.readAt === null,
+      ),
+    ).toHaveLength(0);
+    expect(afterReadAll.body).toContainEqual(
+      expect.objectContaining({ id: own?.id, readAt }),
+    );
+
+    const secondReadAll = await request(app.getHttpServer())
+      .post('/notifications/read-all')
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .expect(200);
+    expect(secondReadAll.body).toEqual({ updated: 0 });
+
+    // The viewer's row is untouched by the worker's read-all.
+    const viewerAfterReadAll = await request(app.getHttpServer())
+      .get('/notifications')
+      .set('Cookie', viewerCookie)
+      .expect(200);
+    expect(viewerAfterReadAll.body).toContainEqual(
+      expect.objectContaining({ projectId: project.id, readAt: null }),
+    );
   });
 
 });

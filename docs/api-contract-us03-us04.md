@@ -23,10 +23,17 @@
 | POST | `/projects/:id/members` | PM | `AssignProjectMemberDto` | 201 `ProjectMemberResponse` |
 | DELETE | `/projects/:id/members/:userId` | PM | — | `{ projectId, userId, removed: true }` |
 | GET | `/notifications` | any | — | `ProjectAssignmentNotification[]` (own rows only) |
+| PATCH | `/notifications/:id/read` | any | — | `ProjectAssignmentNotification` (own row; sets `readAt` once) |
+| POST | `/notifications/read-all` | any | — | `{ updated: number }` (own unread rows only) |
 
 Non-PM access to a PM route → 403 `"Project Manager role required"`. Non-worker access to
 `/projects/assigned` → 403 `"Worker role required"`. A project is always scoped by `ownerId`;
 a PM cannot read or mutate another PM's project (404 `"Project not found"`).
+
+Notifications are caller-scoped: `PATCH /notifications/:id/read` returns 404
+`"Notification not found"` for another user's row or an unknown id, and is idempotent (a second
+call keeps the first `readAt`). A malformed non-UUID id is 400 (route UUID pipe). Both writes
+require the CSRF header; without it the response is 403 `"Missing or invalid CSRF header"`.
 
 ## 2. Request bodies
 
@@ -70,7 +77,13 @@ interface ProjectAssignmentNotification {
   id: string; type: 'PROJECT_ASSIGNED'; title: string; message: string;
   projectId: string; projectName: string; readAt: string | null; createdAt: string;
 }
+
+interface NotificationsReadAllResponse { updated: number } // rows changed from unread to read
 ```
+
+`markRead` returns the same `ProjectAssignmentNotification` shape as `GET /notifications`,
+including the joined `projectName`; `readAt` is an ISO timestamp once read and unchanged by
+later calls. `read-all` only counts the caller's rows whose `readAt` was null.
 
 Display strings map to Prisma enums (`Active→ACTIVE`, `On Hold→ON_HOLD`, `Completed→COMPLETED`,
 `Owner→OWNER`, `Member→MEMBER`, `Contributor→CONTRIBUTOR`). Persisted dates are `@db.Date`; API
@@ -82,7 +95,10 @@ serialisation is `YYYY-MM-DD`.
 `NEXT_PUBLIC_API_URL ?? http://localhost:4000`, `credentials: "include"`, `X-MARS-CSRF: 1` on
 non-GET, 401 → `/login`, 403 → role message. `frontend/app/components/project-manager-guard.tsx`
 calls `GET /auth/me` and only admits `PROJECT_MANAGER`; worker pages live under
-`frontend/app/app/projects/` and the worker dashboard (`/dashboard`).
+`frontend/app/app/projects/` and the worker dashboard (`/dashboard`). The dashboard consumes
+`/notifications` (`readAt === null` marks unread), maps per-row "mark read" to
+`PATCH /notifications/:id/read`, and "mark all as read" to `POST /notifications/read-all`
+(same `credentials`/`X-MARS-CSRF: 1` rules as every non-GET).
 
 ## 5. Deferred
 
