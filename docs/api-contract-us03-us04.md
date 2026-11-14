@@ -23,17 +23,18 @@
 | POST | `/projects/:id/members` | PM | `AssignProjectMemberDto` | 201 `ProjectMemberResponse` |
 | DELETE | `/projects/:id/members/:userId` | PM | — | `{ projectId, userId, removed: true }` |
 | GET | `/notifications` | any | — | `ProjectAssignmentNotification[]` (own rows only) |
-| PATCH | `/notifications/:id/read` | any | — | `ProjectAssignmentNotification` (own row; sets `readAt` once) |
-| POST | `/notifications/read-all` | any | — | `{ updated: number }` (own unread rows only) |
+| PATCH | `/notifications/:id/read` | any | — | 200 `ProjectAssignmentNotification` (own row; sets `readAt` once) |
+| POST | `/notifications/read-all` | any | — | 200 `{ updated: number }` (own unread rows only) |
 
 Non-PM access to a PM route → 403 `"Project Manager role required"`. Non-worker access to
 `/projects/assigned` → 403 `"Worker role required"`. A project is always scoped by `ownerId`;
 a PM cannot read or mutate another PM's project (404 `"Project not found"`).
 
 Notifications are caller-scoped: `PATCH /notifications/:id/read` returns 404
-`"Notification not found"` for another user's row or an unknown id, and is idempotent (a second
-call keeps the first `readAt`). A malformed non-UUID id is 400 (route UUID pipe). Both writes
-require the CSRF header; without it the response is 403 `"Missing or invalid CSRF header"`.
+`"Notification not found"` for another user's row or an unknown id, and is idempotent even under
+concurrent calls (the conditional write means the first `readAt` wins). A malformed non-UUID id
+is 400 (route UUID pipe). Both writes require the CSRF header; without it the response is 403
+`"Missing or invalid CSRF header"`.
 
 ## 2. Request bodies
 

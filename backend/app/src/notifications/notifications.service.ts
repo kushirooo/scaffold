@@ -28,21 +28,20 @@ export class NotificationsService {
     userId: string,
     id: string,
   ): Promise<ProjectAssignmentNotification> {
+    // Atomic: the conditional update lets only the first concurrent call write
+    // `readAt`. An already-read row is left untouched and returned as-is.
+    await this.prisma.notification.updateMany({
+      where: { id, userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+
     const notification = await this.prisma.notification.findFirst({
       where: { id, userId },
       include: NOTIFICATION_INCLUDE,
     });
     if (!notification) throw new NotFoundException('Notification not found');
 
-    // Idempotent: once read, later calls keep the first `readAt` timestamp.
-    if (notification.readAt) return this.toResponse(notification);
-
-    const updated = await this.prisma.notification.update({
-      where: { id },
-      data: { readAt: new Date() },
-      include: NOTIFICATION_INCLUDE,
-    });
-    return this.toResponse(updated);
+    return this.toResponse(notification);
   }
 
   async markAllRead(userId: string): Promise<{ updated: number }> {
