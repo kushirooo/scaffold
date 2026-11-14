@@ -28,6 +28,7 @@ export interface ValidatedEnvironment {
   /** Parsed recipients for the failure alert. */
   ADMIN_ALERT_EMAILS: string[];
   INVITE_TTL_SECONDS: number;
+  RESET_TTL_SECONDS: number;
   SMTP_HOST?: string;
   SMTP_PORT?: number;
   SMTP_USER?: string;
@@ -330,6 +331,12 @@ export function validateEnvironment(
     config.INVITE_TTL_SECONDS,
     86_400,
   );
+  // US19 §9.4: reset links live 15 minutes by default.
+  const resetTtlSeconds = parsePositiveInteger(
+    'RESET_TTL_SECONDS',
+    config.RESET_TTL_SECONDS,
+    900,
+  );
 
   let smtpHost: string | undefined;
   let smtpPort: number | undefined;
@@ -378,6 +385,7 @@ export function validateEnvironment(
     ADMIN_ALERT_EMAIL: adminAlert.normalised,
     ADMIN_ALERT_EMAILS: adminAlert.emails,
     INVITE_TTL_SECONDS: inviteTtlSeconds,
+    RESET_TTL_SECONDS: resetTtlSeconds,
     SMTP_HOST: smtpHost,
     SMTP_PORT: smtpPort,
     SMTP_USER: smtpUser,

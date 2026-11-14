@@ -125,6 +125,7 @@ describe('validateEnvironment', () => {
     expect(env.MAIL_FROM).toContain('no-reply@rafconsult.test');
     expect(env.ADMIN_ALERT_EMAILS).toEqual(['admin@rafconsult.test']);
     expect(env.INVITE_TTL_SECONDS).toBe(86_400);
+    expect(env.RESET_TTL_SECONDS).toBe(900);
     expect(env.SMTP_HOST).toBeUndefined();
     expect(env.SMTP_PORT).toBeUndefined();
     expect(env.RESEND_API_KEY).toBeUndefined();
@@ -184,6 +185,21 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment({ INVITE_TTL_SECONDS: '0' })).toThrow(
       'INVITE_TTL_SECONDS must be a positive integer',
     );
+  });
+
+  it('parses a configured reset TTL and defaults it to 900 seconds', () => {
+    expect(validateEnvironment({ RESET_TTL_SECONDS: '60' }).RESET_TTL_SECONDS).toBe(
+      60,
+    );
+    expect(validateEnvironment({}).RESET_TTL_SECONDS).toBe(900);
+  });
+
+  it('rejects a non-positive or non-integer reset TTL', () => {
+    for (const value of ['0', '-900', '900.5', 'not-a-number']) {
+      expect(() => validateEnvironment({ RESET_TTL_SECONDS: value })).toThrow(
+        'RESET_TTL_SECONDS must be a positive integer',
+      );
+    }
   });
 
   it('parses a comma-separated admin alert list', () => {

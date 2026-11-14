@@ -1,7 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { CreateResetTokenInput } from './reset-token.types.js';
+import type {
+  CreateResetTokenInput,
+  ResetTokenRecord,
+} from './reset-token.types.js';
 import type { ResetTokensRepository } from './reset-tokens.repository.js';
+
+/**
+ * Only the fields the domain record exposes. The raw token is never stored at
+ * all, so there is nothing else to select.
+ */
+const RESET_TOKEN_SELECT = {
+  id: true,
+  userId: true,
+  tokenHash: true,
+  purpose: true,
+  expiresAt: true,
+  usedAt: true,
+} as const;
 
 @Injectable()
 export class PrismaResetTokensRepository implements ResetTokensRepository {
@@ -30,6 +46,13 @@ export class PrismaResetTokensRepository implements ResetTokensRepository {
           expiresAt: input.expiresAt,
         },
       });
+    });
+  }
+
+  async findByTokenHash(tokenHash: string): Promise<ResetTokenRecord | null> {
+    return this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      select: RESET_TOKEN_SELECT,
     });
   }
 }

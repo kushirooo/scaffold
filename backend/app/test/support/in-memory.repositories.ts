@@ -71,6 +71,16 @@ export class InMemoryUsersRepository implements UsersRepository {
     return null;
   }
 
+  async findActiveByEmail(email: string): Promise<User | null> {
+    const normalized = email.trim().toLowerCase();
+    for (const user of this.records.values()) {
+      if (user.email.toLowerCase() === normalized && user.isActive) {
+        return { ...user };
+      }
+    }
+    return null;
+  }
+
   async findById(id: string): Promise<User | null> {
     const user = this.records.get(id);
     if (!user) {
