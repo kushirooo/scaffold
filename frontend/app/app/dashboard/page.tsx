@@ -7,7 +7,8 @@ import {
   fetchCurrentUser,
   fetchProjectNotifications,
 } from '@/services/projectService';
-import type { CurrentUser } from '@/services/projectService';
+import type { CurrentUser } from '@/types/auth';
+import { ApiError } from '@/lib/api';
 import type { Project, ProjectNotification } from '@/types/project';
 
 export default function DashboardPage() {
@@ -38,7 +39,7 @@ export default function DashboardPage() {
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(
-            error instanceof Error ? error.message : 'Unable to load your dashboard.',
+            error instanceof ApiError ? error.message : 'Unable to load your dashboard.',
           );
         }
       } finally {

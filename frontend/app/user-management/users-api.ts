@@ -1,25 +1,12 @@
-
+import { ApiError, apiRequest } from "@/lib/api";
 import type {
   AccountStatus,
   UserInput,
   UserRecord,
 } from "./user-types";
 
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-
-  constructor(message: string, status: number, code?: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"
-).replace(/\/+$/, "");
+/** Re-exported so the user-management UI can catch failures from the shared client. */
+export { ApiError };
 
 export const IS_DEMO_MODE =
   process.env.NEXT_PUBLIC_DEMO_MODE === "true";
@@ -103,65 +90,6 @@ function normalizeUser(value: unknown): UserRecord {
   };
 }
 
-async function request<T>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        ...(init.method && init.method.toUpperCase() !== "GET"
-          ? { "X-MARS-CSRF": "1" }
-          : {}),
-        ...(init.body && !(init.body instanceof FormData)
-          ? { "Content-Type": "application/json" }
-          : {}),
-        ...init.headers,
-      },
-    });
-  } catch {
-    throw new ApiError(
-      `Cannot connect to the API at ${API_BASE_URL}. Check that NestJS is running.`,
-      0,
-      "NETWORK_ERROR"
-    );
-  }
-
-  const contentType =
-    response.headers.get("content-type") || "";
-
-  const body: unknown = contentType.includes("application/json")
-    ? await response.json().catch(() => ({}))
-    : await response.text().catch(() => "");
-
-  const raw = asObject(body);
-
-  if (!response.ok) {
-    const message = stringValue(
-      raw.message ?? raw.error,
-      typeof body === "string"
-        ? body
-        : `Request failed (${response.status}).`
-    );
-
-    const code = stringValue(
-      raw.code,
-      response.status === 409
-        ? "DUPLICATE_EMAIL"
-        : undefined
-    );
-
-    throw new ApiError(message, response.status, code);
-  }
-
-  return body as T;
-}
-
 function preventDemoWrite(): never {
   throw new ApiError(
     "Demo mode is enabled. Connect the NestJS backend to manage real user accounts.",
@@ -183,7 +111,7 @@ export async function getUsers(): Promise<{
     };
   }
 
-  const response = await request<unknown>("/users");
+  const response = await apiRequest<unknown>("/users");
   const raw = asObject(response);
 
   const list = Array.isArray(response)
@@ -220,7 +148,7 @@ export async function createUser(
     role: input.role,
   };
 
-  const response = await request<unknown>("/users", {
+  const response = await apiRequest<unknown>("/users", {
     method: "POST",
     body: JSON.stringify(userData),
   });
@@ -271,7 +199,7 @@ export async function updateUser(
     role: input.role,
   };
 
-  await request<unknown>(
+  await apiRequest<unknown>(
     `/users/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
@@ -290,7 +218,7 @@ export async function setUserStatus(
     return preventDemoWrite();
   }
 
-  await request<unknown>(
+  await apiRequest<unknown>(
     `/users/${encodeURIComponent(id)}/status`,
     {
       method: "PATCH",
@@ -308,7 +236,7 @@ export async function deleteUser(
     return preventDemoWrite();
   }
 
-  await request<unknown>(
+  await apiRequest<unknown>(
     `/users/${encodeURIComponent(id)}`,
     {
       method: "DELETE",

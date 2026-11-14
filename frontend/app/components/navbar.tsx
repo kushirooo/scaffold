@@ -4,10 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { logout, type AuthUser } from '@/services/authService';
+import { logout } from '@/services/authService';
+import type { CurrentUser } from '@/types/auth';
 
 interface NavbarProps {
-  user: AuthUser;
+  user: CurrentUser;
 }
 
 export default function Navbar({ user }: NavbarProps) {

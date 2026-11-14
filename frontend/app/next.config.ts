@@ -1,10 +1,21 @@
-import type { NextConfig } from "next";
+import path from 'node:path';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // Automatic Instant Navigation validation flags every route that is not
+    // instant yet; keep it opt-in until the pages opt in explicitly (k330).
+    instantInsights: {
+      validationLevel: 'manual-warning',
+    },
+  },
   turbopack: {
+    // Pin the project root so Turbopack does not infer a parent workspace root
+    // (and warn about it) when the app is run from this directory.
+    root: path.resolve(process.cwd()),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthApiError, getMe, type AuthUser } from '@/services/authService';
+import { getMe } from '@/services/authService';
+import type { CurrentUser } from '@/types/auth';
 import Navbar from '@/components/navbar';
 
 interface AuthGuardProps {
@@ -11,7 +12,7 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -24,13 +25,10 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           setUser(currentUser);
           setChecking(false);
         }
-      } catch (error) {
-        if (cancelled) return;
-        if (error instanceof AuthApiError && error.status === 401) {
-          router.replace('/login');
-          return;
-        }
-        router.replace('/login');
+      } catch {
+        // A 401 and any transport/server failure both end at /login; this
+        // guard has no error surface of its own.
+        if (!cancelled) router.replace('/login');
       }
     };
 
