@@ -284,8 +284,7 @@ npm run test:e2e                                                             # 5
 npm run lint && npm run build
 ```
 
-No CI/staging verification is claimed here; `.github/workflows/ci.yml` runs the suites on
-push.
+CI `api`+`web` passed on PR #4 (run `43547780234`); staging is not claimed.
 
 ## 8. Open items
 

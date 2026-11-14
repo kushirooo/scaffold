@@ -6,7 +6,7 @@
 | Owner / verified by | implementer self-check + independent review (task-9) + Lead manual API/header run |
 | Date / environment | 2026-11-14 10:24 Asia/Kuala_Lumpur; agent sandbox, Node v26.13.0, local PostgreSQL 18 (`raf_pms_test`, `raf_pms_e2e`) |
 | Revision | `feat/us19-backend` @ `49bf00c` + `fix/us19-frontend-contract` @ `569924f` (T10 P3 fix + CI TTL coercion) |
-| Verdict | **PASS (local)** for the US19 API; US18 AC1, CI and staging `DEFERRED` |
+| Verdict | **PASS (local)** for the US19 API; CI suites **PASS (CI)**; US18 AC1 and staging `DEFERRED` |
 
 `[OPEN-1]`: US19 AC3 asks for "system complexity rules"; the implemented policy is the
 agreed deviation — **12–128 code points after NFKC, no character classes, exact bundled
@@ -21,6 +21,7 @@ blocklist** — *met per agreed deviation, pending SM amendment*. Literal AC3 is
 | 3 | `npm run test:e2e` | exit 0 — 5 files, **56/56** on `raf_pms_e2e` |
 | 4 | `npm run lint` | exit 0 — 0 warnings, 0 errors |
 | 5 | `npm run build` | exit 0 — `nest build` |
+| 6 | GitHub Actions `api` + `web` on PR #4 | **pass** — run `43547780234` |
 
 ## Acceptance criteria (plan §16.3 US19) → evidence
 
@@ -38,11 +39,10 @@ blocklist** — *met per agreed deviation, pending SM amendment*. Literal AC3 is
 | fail paths: token/email/alert throw → still 204, one alert, no token/reset URL in alert/log (redaction regression) | PASS (local) | e2e failure cases + T10 redaction test |
 | frontend pages aligned: CSRF header, `{token,newPassword}`, exact generic-400 branch, 12–128 client check; `Referrer-Policy: no-referrer` | PASS (local) — browser click-through/Mailtrap delivery DEFERRED | frontend `569924f`; Lead manual header + API reset→login→change flow; k213 |
 | US18 AC1 — account creation triggers welcome email | DEFERRED (no US02) | US18 e2e covers the `account.created` event; US02 emitter absent |
-| CI suites / staging end-to-end (DoD item 5) | DEFERRED (no CI run / no staging) | no run URL; staging not deployed |
+| CI suites / staging end-to-end (DoD item 5) | PASS (CI) for suites; staging DEFERRED (no staging) | run `43547780234` api+web pass; staging not deployed |
 
 ## Deferred checks
 
-- CI `api` job (`test`, `test:db`, `test:e2e` with both test DBs) — no CI run in the sandbox; the US19 PR runs it (Lead/DevOps).
 - Staging forgot→email→reset→login and Mailtrap/Resend delivery — staging not deployed (Lead/QA).
 - US18 AC1 (`account.created` emission) — US02 is not in this slice (Lead).
 Deferred is not passed; no CI or staging result is claimed.
