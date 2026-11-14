@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { AuthApiError, getMe, login } from '@/services/authService';
+import { getMe, login } from '@/services/authService';
+import { isUnauthorized } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,7 +45,7 @@ export default function LoginPage() {
       router.replace(result.redirectTo || '/dashboard');
       router.refresh();
     } catch (error) {
-      if (error instanceof AuthApiError && error.status === 401) {
+      if (isUnauthorized(error)) {
         setErrorMessage('Invalid email or password');
       } else if (error instanceof Error) {
         setErrorMessage(error.message);

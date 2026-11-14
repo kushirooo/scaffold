@@ -5,11 +5,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
+import { ApiError, apiRequest } from "@/lib/api";
 
 type ForgotStatus = "form" | "sent" | "failed";
 type ResetStatus = "form" | "success" | "expired";
-
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/$/, "");
 
 /**
  * Exact generic body the API returns for every invalid single-use link
@@ -23,10 +22,10 @@ const RESET_LINK_INVALID_MESSAGE =
 const PASSWORD_MIN_CODE_POINTS = 12;
 const PASSWORD_MAX_CODE_POINTS = 128;
 
-const JSON_CSRF_HEADERS = {
-  "Content-Type": "application/json",
-  "X-MARS-CSRF": "1",
-} as const;
+/** Use the API's message; non-API failures get the generic fallback. */
+function apiErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof ApiError ? error.message : fallback;
+}
 
 /** Code points are counted after NFKC so emoji count once and equivalents agree. */
 function passwordCodePointLength(password: string): number {
@@ -109,15 +108,6 @@ function StatusIcon({ failed = false }: { failed?: boolean }) {
   );
 }
 
-function getApiMessage(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const message = (payload as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) return message;
-    if (Array.isArray(message) && message.every((item) => typeof item === "string")) return message.join(" ");
-  }
-  return fallback;
-}
-
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<ForgotStatus>("form");
@@ -135,23 +125,14 @@ export function ForgotPasswordPage() {
 
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+      await apiRequest<void>("/auth/forgot-password", {
         method: "POST",
-        credentials: "include",
-        headers: JSON_CSRF_HEADERS,
         body: JSON.stringify({ email: cleanEmail }),
       });
-      // Success is specifically 204 with no body: check it before parsing JSON.
-      if (response.status === 204) {
-        setStatus("sent");
-        return;
-      }
-      const payload: unknown = await response.json().catch(() => null);
+      setStatus("sent");
+    } catch (error) {
       setStatus("failed");
-      setError(getApiMessage(payload, "We could not process your request. Please try again."));
-    } catch {
-      setStatus("failed");
-      setError("Unable to connect to the server. Please check that the backend is running and try again.");
+      setError(apiErrorMessage(error, "We could not process your request. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -253,30 +234,25 @@ export function ResetPasswordPage() {
 
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/auth/reset-password`, {
+      await apiRequest<void>("/auth/reset-password", {
         method: "POST",
-        credentials: "include",
-        headers: JSON_CSRF_HEADERS,
         body: JSON.stringify({ token, newPassword: password }),
       });
-      // Success is 200 with an empty body; do not parse it as JSON.
-      if (response.ok) {
-        setStatus("success");
-        setPassword("");
-        setConfirmPassword("");
-        return;
-      }
-      const payload: unknown = await response.json().catch(() => null);
-      const apiMessage = getApiMessage(payload, "We could not update your password. Please check the link and try again.");
+      setStatus("success");
+      setPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      const apiMessage = apiErrorMessage(
+        error,
+        "We could not update your password. Please check the link and try again.",
+      );
       // Only the API's exact generic message means the link is expired/used/
       // unknown/inactive; policy messages and 403/5xx stay inline.
-      if (response.status === 400 && apiMessage === RESET_LINK_INVALID_MESSAGE) {
+      if (error instanceof ApiError && error.status === 400 && apiMessage === RESET_LINK_INVALID_MESSAGE) {
         setStatus("expired");
       } else {
         setError(apiMessage);
       }
-    } catch {
-      setError("Unable to connect to the server. Please check that the backend is running and try again.");
     } finally {
       setBusy(false);
     }

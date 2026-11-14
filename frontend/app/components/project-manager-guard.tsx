@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchCurrentUser, ProjectApiError } from '@/services/projectService';
+import { fetchCurrentUser } from '@/services/projectService';
+import { isUnauthorized } from '@/lib/api';
 
 export default function ProjectManagerGuard({
   children,
@@ -19,7 +20,7 @@ export default function ProjectManagerGuard({
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        if (error instanceof ProjectApiError && error.status === 401) {
+        if (isUnauthorized(error)) {
           router.replace('/login');
           return;
         }
@@ -39,7 +40,7 @@ export default function ProjectManagerGuard({
     void fetchCurrentUser()
       .then((user) => setStatus(user.role === 'PROJECT_MANAGER' ? 'allowed' : 'forbidden'))
       .catch((error: unknown) => {
-        if (error instanceof ProjectApiError && error.status === 401) {
+        if (isUnauthorized(error)) {
           router.replace('/login');
           return;
         }
