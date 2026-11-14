@@ -48,9 +48,15 @@ const CSRF = { [CSRF_HEADER]: '1' };
  */
 class ScriptedEmailSender implements EmailSender {
   readonly messages: EmailMessage[] = [];
-  private readonly failures: Error[] = [];
+  private readonly failures: Array<
+    Error | ((message: EmailMessage) => Error)
+  > = [];
 
-  failNext(error = new Error('scripted email send failure')): void {
+  failNext(
+    error: Error | ((message: EmailMessage) => Error) = new Error(
+      'scripted email send failure',
+    ),
+  ): void {
     this.failures.push(error);
   }
 
@@ -63,7 +69,7 @@ class ScriptedEmailSender implements EmailSender {
     this.messages.push({ ...message });
     const failure = this.failures.shift();
     if (failure) {
-      throw failure;
+      throw typeof failure === 'function' ? failure(message) : failure;
     }
   }
 }
@@ -492,6 +498,65 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       const serialisedLogs = JSON.stringify(logs);
       expect(serialisedLogs).not.toContain(rawToken);
       expect(serialisedLogs).not.toContain(rows[0].tokenHash);
+      expect(serialisedLogs).not.toContain('/reset-password?token=');
+    });
+
+    it('redacts reset URLs and token-shaped text from transport errors before the alert', async () => {
+      const user = await seedUser();
+      const errorSpy = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      // 1) The transport echoes the whole rendered email (reset URL + token).
+      sender.failNext(
+        (message) => new Error(`transport rejected body: ${message.text}`),
+      );
+      await postForgot(user.email).expect(204);
+      const [firstAttempt] = userMessages(sender, user.email);
+      const firstToken = extractRawToken(firstAttempt);
+      expect(firstToken).toHaveLength(43);
+
+      // 2) The transport echoes the bare token with no URL around it.
+      sender.failNext((message) => {
+        const match = /reset-password\?token=([A-Za-z0-9_-]+)/.exec(
+          message.text,
+        );
+        return new Error(`provider echoed token ${match?.[1] ?? ''}`);
+      });
+      await postForgot(user.email).expect(204);
+      const attempts = userMessages(sender, user.email);
+      expect(attempts).toHaveLength(2);
+      const secondToken = extractRawToken(attempts[1]);
+      expect(secondToken).toHaveLength(43);
+      expect(secondToken).not.toBe(firstToken);
+
+      const alerts = alertMessages(sender);
+      expect(alerts).toHaveLength(2);
+      for (const alert of alerts) {
+        for (const alternative of [alert.subject, alert.text, alert.html]) {
+          expect(alternative).not.toContain(firstToken);
+          expect(alternative).not.toContain(secondToken);
+          expect(alternative).not.toContain('/reset-password?token=');
+        }
+        // Redacted, but diagnostic context (error class/stage) is kept.
+        expect(alert.text).toContain('[redacted');
+        expect(alert.text).toContain('Error class: Error');
+        expect(alert.text).toContain('Sending the reset email');
+        expect(alert.to).toEqual(adminAlertEmails);
+      }
+
+      const logs = loggedEvents(errorSpy);
+      expect(logs).toHaveLength(2);
+      for (const entry of logs) {
+        expect(entry).toMatchObject({
+          event: 'password_reset_email_failed',
+          stage: 'send',
+          errorName: 'Error',
+        });
+      }
+      const serialisedLogs = JSON.stringify(logs);
+      expect(serialisedLogs).not.toContain(firstToken);
+      expect(serialisedLogs).not.toContain(secondToken);
       expect(serialisedLogs).not.toContain('/reset-password?token=');
     });
 

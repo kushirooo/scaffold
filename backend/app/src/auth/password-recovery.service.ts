@@ -46,6 +46,23 @@ function errorMessageOf(error: unknown): string {
 }
 
 /**
+ * A transport error message is untrusted text: providers may echo the rendered
+ * email, including its reset link. Strip complete reset URLs and 43+ character
+ * base64url token-shaped strings before the text can reach a log or the admin
+ * alert, so "the alert never contains the token" does not depend on adapter
+ * discipline. The error class and stage are still reported for diagnosis.
+ */
+const RESET_URL_TEXT =
+  /https?:\/\/[^\s"'<>]*\/reset-password\?token=[^\s"'<>]+/gi;
+const TOKEN_SHAPED_TEXT = /[A-Za-z0-9_-]{43,}/g;
+
+function redactResetSecrets(value: string): string {
+  return value
+    .replace(RESET_URL_TEXT, '[redacted reset link]')
+    .replace(TOKEN_SHAPED_TEXT, '[redacted token]');
+}
+
+/**
  * US19 password recovery: the forgot half (T3), the reset half (T4) and, in T5,
  * the authenticated change-password path. Token issuance/hashing stays in
  * `ResetTokenService`; the atomic multi-table writes live in
@@ -244,6 +261,7 @@ export class PasswordRecoveryService {
     error: unknown,
   ): Promise<void> {
     const errorName = errorNameOf(error);
+    const errorMessage = redactResetSecrets(errorMessageOf(error));
 
     try {
       this.logger.error({
@@ -263,7 +281,7 @@ export class PasswordRecoveryService {
         email: user.email,
         stage,
         errorName,
-        errorMessage: errorMessageOf(error),
+        errorMessage,
         occurredAt: new Date(),
       });
       // Exactly one attempt, no retry and no recursion.
