@@ -133,6 +133,10 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
         where: { id: oldSessionId },
       });
       expect(oldSession.revokedAt).toBeInstanceOf(Date);
+      // A reset never creates a session (no auto-login).
+      await expect(
+        prisma.session.count({ where: { userId: user.id } }),
+      ).resolves.toBe(1);
     });
 
     it('consumes a valid INVITE token', async () => {
@@ -202,11 +206,19 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
       });
     });
 
-    it('returns false for an expired token and leaves it unused', async () => {
+    it('returns false for an expired token and leaves everything else untouched', async () => {
       const user = await seedUser();
+      const sessionId = await seedSession(user.id);
       await seedToken(user.id, {
         tokenHash: RESET_HASH,
         expiresAt: pastDate(60_000),
+      });
+      await seedToken(user.id, {
+        tokenHash: INVITE_HASH,
+        purpose: 'INVITE',
+      });
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
       });
 
       await expect(
@@ -221,6 +233,18 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
         where: { tokenHash: RESET_HASH },
       });
       expect(token.usedAt).toBeNull();
+      const sibling = await prisma.passwordResetToken.findUniqueOrThrow({
+        where: { tokenHash: INVITE_HASH },
+      });
+      expect(sibling.usedAt).toBeNull();
+      const session = await prisma.session.findUniqueOrThrow({
+        where: { id: sessionId },
+      });
+      expect(session.revokedAt).toBeNull();
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.tokenVersion).toBe(before.tokenVersion);
       await expect(credentialOf(user.id)).resolves.toMatchObject({
         passwordHash: OLD_HASH,
       });
@@ -268,6 +292,44 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
       });
       expect(token.usedAt).toBeNull();
       await expect(credentialOf(inactive.id)).resolves.toMatchObject({
+        passwordHash: OLD_HASH,
+      });
+    });
+
+    it("leaves another user's tokens, sessions and credential untouched", async () => {
+      const user = await seedUser();
+      const other = await seedUser();
+      await seedToken(user.id, { tokenHash: RESET_HASH });
+      await seedToken(other.id, {
+        tokenHash: INVITE_HASH,
+        purpose: 'INVITE',
+      });
+      const otherSessionId = await seedSession(other.id);
+      const otherBefore = await prisma.user.findUniqueOrThrow({
+        where: { id: other.id },
+      });
+
+      await expect(
+        repository.resetPassword({
+          tokenHash: RESET_HASH,
+          userId: user.id,
+          passwordHash: NEW_HASH,
+        }),
+      ).resolves.toBe(true);
+
+      const otherToken = await prisma.passwordResetToken.findUniqueOrThrow({
+        where: { tokenHash: INVITE_HASH },
+      });
+      expect(otherToken.usedAt).toBeNull();
+      const otherSession = await prisma.session.findUniqueOrThrow({
+        where: { id: otherSessionId },
+      });
+      expect(otherSession.revokedAt).toBeNull();
+      const otherAfter = await prisma.user.findUniqueOrThrow({
+        where: { id: other.id },
+      });
+      expect(otherAfter.tokenVersion).toBe(otherBefore.tokenVersion);
+      await expect(credentialOf(other.id)).resolves.toMatchObject({
         passwordHash: OLD_HASH,
       });
     });

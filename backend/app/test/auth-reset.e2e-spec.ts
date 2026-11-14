@@ -607,6 +607,35 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       await postLogin(invited.email, NEW_PASSWORD).expect(200);
     });
 
+    it('accepts 12/128 code points and spaces, emoji and all-lowercase passwords on the HTTP path', async () => {
+      const user = await seedUser();
+      const acceptedPasswords = [
+        'a'.repeat(12),
+        'a'.repeat(128),
+        'correct horse battery staple',
+        '🦄🌈🚀'.repeat(4),
+        'thisisalllowercase',
+      ];
+
+      for (const password of acceptedPasswords) {
+        const { rawToken } = await tokens.issueReset(user.id);
+        await postReset(rawToken, password).expect(200);
+        await postLogin(user.email, password).expect(200);
+      }
+    });
+
+    it('stores the password in NFKC form, so an NFD login succeeds', async () => {
+      const user = await seedUser();
+      const nfcPassword = 'café-correct-horse';
+      const nfdPassword = 'cafe\u0301-correct-horse';
+
+      const { rawToken } = await tokens.issueReset(user.id);
+      await postReset(rawToken, nfcPassword).expect(200);
+
+      await postLogin(user.email, nfdPassword).expect(200);
+      await postLogin(user.email, nfcPassword).expect(200);
+    });
+
     it('returns the same generic 400 for expired, used, unknown and inactive links', async () => {
       const expired = await seedUser();
       const expiredToken = await tokens.issueReset(expired.id);
@@ -956,6 +985,71 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       });
       expect(credential.passwordHash).toBe(passwordHash);
       await getMe(cookie).expect(200);
+    });
+  });
+
+  describe('secrets and logs', () => {
+    it('keeps tokens, passwords and hashes out of every response body and captured log', async () => {
+      const passwordHash = await hasher.hash(CURRENT_PASSWORD);
+      const user = await seedUser({ passwordHash });
+      const errorSpy = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      const logSpy = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const warnSpy = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+
+      const bodies: string[] = [];
+      const forgot = await postForgot(user.email).expect(204);
+      bodies.push(forgot.text, JSON.stringify(forgot.body));
+      const rawToken = extractRawToken(userMessages(sender, user.email)[0]);
+
+      const reset = await postReset(rawToken, NEW_PASSWORD).expect(200);
+      bodies.push(reset.text, JSON.stringify(reset.body));
+
+      const login = await postLogin(user.email, NEW_PASSWORD).expect(200);
+      const cookie = cookieHeader(login);
+      bodies.push(login.text, JSON.stringify(login.body));
+
+      const change = await postChangePassword(
+        cookie,
+        NEW_PASSWORD,
+        OTHER_NEW_PASSWORD,
+      ).expect(200);
+      bodies.push(change.text, JSON.stringify(change.body));
+
+      const secrets = [
+        rawToken,
+        sha256Hex(rawToken),
+        CURRENT_PASSWORD,
+        NEW_PASSWORD,
+        OTHER_NEW_PASSWORD,
+      ];
+      const serialisedBodies = bodies.join('\n');
+      for (const secret of secrets) {
+        expect(serialisedBodies).not.toContain(secret);
+      }
+      expect(serialisedBodies).not.toMatch(/\$argon2/);
+
+      const capturedLogs = JSON.stringify([
+        ...errorSpy.mock.calls,
+        ...logSpy.mock.calls,
+        ...warnSpy.mock.calls,
+      ]);
+      for (const secret of secrets) {
+        expect(capturedLogs).not.toContain(secret);
+      }
+      expect(capturedLogs).not.toContain('/reset-password?token=');
+
+      // Hash at rest: only the SHA-256 digest of the raw token is committed.
+      const row = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { userId: user.id },
+      });
+      expect(row.tokenHash).toBe(sha256Hex(rawToken));
+      expect(JSON.stringify(row)).not.toContain(rawToken);
     });
   });
 });
