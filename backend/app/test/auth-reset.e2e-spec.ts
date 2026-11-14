@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Logger, type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -6,7 +6,15 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
-import { MISSING_CSRF_MESSAGE } from '../src/auth/auth.types.js';
+import {
+  MISSING_CSRF_MESSAGE,
+  RESET_LINK_INVALID_MESSAGE,
+} from '../src/auth/auth.types.js';
+import {
+  PASSWORD_TOO_COMMON_MESSAGE,
+  PASSWORD_TOO_LONG_MESSAGE,
+  PASSWORD_TOO_SHORT_MESSAGE,
+} from '../src/auth/password-policy.js';
 import { ResetTokenService } from '../src/auth/reset-token.service.js';
 import { CSRF_HEADER } from '../src/auth/guards/csrf.guard.js';
 import {
@@ -22,6 +30,9 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 // are deterministic and the seeded demo accounts are never touched.
 const EMAIL_PREFIX = 'us19-forgot-e2e-';
 const FORGOT_PATH = '/auth/forgot-password';
+const RESET_PATH = '/auth/reset-password';
+const NEW_PASSWORD = 'a brand new passphrase';
+const OTHER_NEW_PASSWORD = 'another valid passphrase';
 const CSRF = { [CSRF_HEADER]: '1' };
 
 /**
@@ -91,6 +102,7 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
   let frontendUrl: string;
   let adminAlertEmails: string[];
   let resetTtlSeconds: number;
+  let tokens: ResetTokenService;
 
   beforeAll(async () => {
     sender = new ScriptedEmailSender();
@@ -108,6 +120,7 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
     frontendUrl = config.getOrThrow<string>('FRONTEND_URL');
     adminAlertEmails = config.getOrThrow<string[]>('ADMIN_ALERT_EMAILS');
     resetTtlSeconds = config.getOrThrow<number>('RESET_TTL_SECONDS');
+    tokens = moduleFixture.get(ResetTokenService);
   });
 
   beforeEach(async () => {
@@ -165,6 +178,27 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
     return { id: user.id, email: user.email, fullName };
   }
 
+  async function seedSession(userId: string): Promise<string> {
+    const session = await prisma.session.create({
+      data: { userId, expiresAt: new Date(Date.now() + 3_600_000) },
+    });
+    return session.id;
+  }
+
+  function postReset(token: string, newPassword: string) {
+    return request(app.getHttpServer())
+      .post(RESET_PATH)
+      .set(CSRF)
+      .send({ token, newPassword });
+  }
+
+  function postLogin(email: string, password: string) {
+    return request(app.getHttpServer())
+      .post('/auth/login')
+      .set(CSRF)
+      .send({ email, password });
+  }
+
   function postForgot(email: string) {
     return request(app.getHttpServer())
       .post(FORGOT_PATH)
@@ -196,7 +230,7 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       expect(message.subject).toBe(RESET_EMAIL_SUBJECT);
       expect(message.text).toContain(`${frontendUrl}/reset-password?token=`);
       expect(message.text).toContain(
-        `expires in ${resetTtlSeconds / 60} minutes`,
+        `expires in ${Math.ceil(resetTtlSeconds / 60)} minutes`,
       );
       expect(message.text).toContain(user.fullName);
       expect(message.text).not.toMatch(/\$argon2/);
@@ -445,6 +479,228 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       const [message] = userMessages(sender, user.email);
       expect(message.html).not.toContain('<script>');
       expect(message.html).toContain('&lt;script&gt;');
+    });
+  });
+
+  describe('POST /auth/reset-password', () => {
+    it('consumes a RESET token, updates the credential and starts no session', async () => {
+      const user = await seedUser();
+      const errorSpy = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      const oldSessionId = await seedSession(user.id);
+      const { rawToken } = await tokens.issueReset(user.id);
+      const { rawToken: inviteSibling } = await tokens.issueInvite(user.id);
+      const staleHash = sha256Hex('stale-reset-link-raw');
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          purpose: 'RESET',
+          tokenHash: staleHash,
+          expiresAt: new Date(Date.now() + 900_000),
+        },
+      });
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+
+      const response = await postReset(rawToken, NEW_PASSWORD).expect(200);
+
+      expect(response.text).toBe('');
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toContain(rawToken);
+
+      const rows = await prisma.passwordResetToken.findMany({
+        where: { userId: user.id },
+      });
+      expect(rows).toHaveLength(3);
+      expect(rows.every((row) => row.usedAt instanceof Date)).toBe(true);
+      expect(rows.map((row) => row.tokenHash).sort()).toEqual(
+        [sha256Hex(rawToken), sha256Hex(inviteSibling), staleHash].sort(),
+      );
+      expect(JSON.stringify(rows)).not.toContain(rawToken);
+      expect(JSON.stringify(rows)).not.toContain(inviteSibling);
+
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toMatch(/^\$argon2id\$/);
+      expect(credential.passwordHash).not.toBe('placeholder-argon2id-hash');
+      expect(credential.passwordUpdatedAt).toBeInstanceOf(Date);
+      expect(JSON.stringify(response.body)).not.toMatch(/\$argon2/);
+
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.tokenVersion).toBe(before.tokenVersion + 1);
+
+      const oldSession = await prisma.session.findUniqueOrThrow({
+        where: { id: oldSessionId },
+      });
+      expect(oldSession.revokedAt).toBeInstanceOf(Date);
+
+      // The new password works; the reset itself did not log anyone in, and
+      // nothing about the password/token/hash reached a log.
+      await postLogin(user.email, NEW_PASSWORD).expect(200);
+      expect(JSON.stringify(loggedEvents(errorSpy))).not.toContain(rawToken);
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('consumes a valid INVITE token and creates the missing credential', async () => {
+      const invited = await seedUser({ withCredential: false });
+      const { rawToken } = await tokens.issueInvite(invited.id);
+
+      const response = await postReset(rawToken, NEW_PASSWORD).expect(200);
+
+      expect(response.text).toBe('');
+      expect(response.headers['set-cookie']).toBeUndefined();
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: invited.id },
+      });
+      expect(credential.passwordHash).toMatch(/^\$argon2id\$/);
+      await postLogin(invited.email, NEW_PASSWORD).expect(200);
+    });
+
+    it('returns the same generic 400 for expired, used, unknown and inactive links', async () => {
+      const expired = await seedUser();
+      const expiredToken = await tokens.issueReset(expired.id);
+      await prisma.passwordResetToken.updateMany({
+        where: { userId: expired.id },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+
+      const used = await seedUser();
+      const usedToken = await tokens.issueReset(used.id);
+      await prisma.passwordResetToken.updateMany({
+        where: { userId: used.id },
+        data: { usedAt: new Date(Date.now() - 60_000) },
+      });
+
+      const inactive = await seedUser({ isActive: false });
+      const inactiveToken = await tokens.issueReset(inactive.id);
+      const unknownToken = randomBytes(32).toString('base64url');
+
+      const cases = [
+        { token: expiredToken.rawToken, userId: expired.id },
+        { token: usedToken.rawToken, userId: used.id },
+        { token: inactiveToken.rawToken, userId: inactive.id },
+        { token: unknownToken },
+      ];
+      const bodies: string[] = [];
+      for (const resetCase of cases) {
+        const response = await postReset(resetCase.token, NEW_PASSWORD).expect(
+          400,
+        );
+        expect(response.body.message).toBe(RESET_LINK_INVALID_MESSAGE);
+        expect(response.headers['set-cookie']).toBeUndefined();
+        expect(JSON.stringify(response.body)).not.toContain(resetCase.token);
+        bodies.push(JSON.stringify(response.body));
+      }
+      expect(new Set(bodies).size).toBe(1);
+
+      // No side effects: passwords unchanged, expired/inactive links unconsumed.
+      const expiredCredential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: expired.id },
+      });
+      expect(expiredCredential.passwordHash).toBe('placeholder-argon2id-hash');
+      const expiredRow = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { userId: expired.id },
+      });
+      expect(expiredRow.usedAt).toBeNull();
+      const inactiveRow = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { userId: inactive.id },
+      });
+      expect(inactiveRow.usedAt).toBeNull();
+    });
+
+    it('checks the policy before consuming and keeps the token usable', async () => {
+      const user = await seedUser();
+      const { rawToken } = await tokens.issueReset(user.id);
+      const cases = [
+        { password: 'a'.repeat(11), message: PASSWORD_TOO_SHORT_MESSAGE },
+        { password: 'a'.repeat(129), message: PASSWORD_TOO_LONG_MESSAGE },
+        { password: 'unbelievable', message: PASSWORD_TOO_COMMON_MESSAGE },
+      ];
+
+      for (const resetCase of cases) {
+        const response = await postReset(
+          rawToken,
+          resetCase.password,
+        ).expect(400);
+        expect(response.body.message).toEqual([resetCase.message]);
+        expect(JSON.stringify(response.body)).not.toContain(rawToken);
+        const row = await prisma.passwordResetToken.findFirstOrThrow({
+          where: { tokenHash: sha256Hex(rawToken) },
+        });
+        expect(row.usedAt).toBeNull();
+      }
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toBe('placeholder-argon2id-hash');
+
+      // The untouched token still works with a compliant password.
+      await postReset(rawToken, NEW_PASSWORD).expect(200);
+    });
+
+    it('lets exactly one of two concurrent resets win', async () => {
+      const user = await seedUser();
+      const { rawToken } = await tokens.issueReset(user.id);
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      const passwords = [NEW_PASSWORD, OTHER_NEW_PASSWORD];
+
+      const responses = await Promise.all(
+        passwords.map((password) => postReset(rawToken, password)),
+      );
+
+      expect(responses.map((response) => response.status).sort()).toEqual([
+        200, 400,
+      ]);
+      const failed = responses.find((response) => response.status === 400);
+      expect(failed?.body.message).toBe(RESET_LINK_INVALID_MESSAGE);
+
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.tokenVersion).toBe(before.tokenVersion + 1);
+      const row = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { tokenHash: sha256Hex(rawToken) },
+      });
+      expect(row.usedAt).toBeInstanceOf(Date);
+
+      const winner = responses.findIndex(
+        (response) => response.status === 200,
+      );
+      const loser = responses.findIndex((response) => response.status === 400);
+      await postLogin(user.email, passwords[winner]).expect(200);
+      await postLogin(user.email, passwords[loser]).expect(401);
+    });
+
+    it('requires CSRF and a valid DTO before consuming the token', async () => {
+      const user = await seedUser();
+      const { rawToken } = await tokens.issueReset(user.id);
+
+      await request(app.getHttpServer())
+        .post(RESET_PATH)
+        .send({ token: rawToken, newPassword: NEW_PASSWORD })
+        .expect(403);
+      await postReset('a'.repeat(257), NEW_PASSWORD).expect(400);
+      await request(app.getHttpServer())
+        .post(RESET_PATH)
+        .set(CSRF)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(400);
+
+      const row = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { tokenHash: sha256Hex(rawToken) },
+      });
+      expect(row.usedAt).toBeNull();
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toBe('placeholder-argon2id-hash');
     });
   });
 });

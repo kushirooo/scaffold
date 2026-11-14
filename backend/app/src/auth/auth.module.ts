@@ -14,6 +14,8 @@ import { AuthCookies } from './auth.cookies.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { PasswordHasher } from './password-hasher.js';
+import { PrismaPasswordRecoveryRepository } from './prisma-password-recovery.repository.js';
+import { PASSWORD_RECOVERY_REPOSITORY } from './password-recovery.repository.js';
 import { PasswordRecoveryService } from './password-recovery.service.js';
 import { ResetTokenService } from './reset-token.service.js';
 
@@ -54,6 +56,10 @@ const JWT_AUDIENCE = 'raf-consult-portal';
     {
       provide: RESET_TOKENS_REPOSITORY,
       useClass: PrismaResetTokensRepository,
+    },
+    {
+      provide: PASSWORD_RECOVERY_REPOSITORY,
+      useClass: PrismaPasswordRecoveryRepository,
     },
     ResetTokenService,
     PasswordRecoveryService,

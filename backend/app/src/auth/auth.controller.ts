@@ -18,6 +18,7 @@ import {
 } from './decorators/current-user.decorator.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { PasswordRecoveryService } from './password-recovery.service.js';
 
@@ -60,6 +61,17 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
     await this.passwordRecovery.forgotPassword(dto.email);
+  }
+
+  /**
+   * US19 §9.1: consumes a single-use RESET/INVITE link. Returns 200 with an
+   * empty body and never sets the access-token cookie (no auto-login); every
+   * invalid link is the same generic 400 from the service.
+   */
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
+    await this.passwordRecovery.resetPassword(dto.token, dto.newPassword);
   }
 
   @Get('me')

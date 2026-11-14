@@ -1,4 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EmailService } from '../email/email.service.js';
 import { renderResetEmailAlert } from '../email/templates/admin-alert.template.js';
@@ -8,6 +13,13 @@ import {
   USERS_REPOSITORY,
   type UsersRepository,
 } from '../users/users.repository.js';
+import { RESET_LINK_INVALID_MESSAGE } from './auth.types.js';
+import { PasswordHasher } from './password-hasher.js';
+import { passwordPolicyViolation } from './password-policy.js';
+import {
+  PASSWORD_RECOVERY_REPOSITORY,
+  type PasswordRecoveryRepository,
+} from './password-recovery.repository.js';
 import { ResetTokenService } from './reset-token.service.js';
 
 /**
@@ -25,8 +37,10 @@ function errorMessageOf(error: unknown): string {
 }
 
 /**
- * US19 password recovery. This file grows in T4 (reset) and T5 (change); for
- * now it owns the forgot half only.
+ * US19 password recovery: the forgot half (T3), the reset half (T4) and, in T5,
+ * the authenticated change-password path. Token issuance/hashing stays in
+ * `ResetTokenService`; the atomic multi-table writes live in
+ * `PasswordRecoveryRepository`.
  */
 @Injectable()
 export class PasswordRecoveryService {
@@ -39,6 +53,9 @@ export class PasswordRecoveryService {
     @Inject(USERS_REPOSITORY) private readonly users: UsersRepository,
     private readonly tokens: ResetTokenService,
     private readonly email: EmailService,
+    private readonly hasher: PasswordHasher,
+    @Inject(PASSWORD_RECOVERY_REPOSITORY)
+    private readonly recovery: PasswordRecoveryRepository,
     config: ConfigService,
   ) {
     this.frontendUrl = config.getOrThrow<string>('FRONTEND_URL');
@@ -74,6 +91,56 @@ export class PasswordRecoveryService {
     }
   }
 
+  /**
+   * US19 §9.1: reset a password from a single-use RESET or INVITE link.
+   *
+   * Order matters: the link is validated first and every failure produces the
+   * same generic 400, so nothing distinguishes expired, used, unknown,
+   * wrong-purpose or inactive-user links. The policy is checked before any
+   * consumption, and the expensive argon2 hash runs outside the transaction,
+   * which starts only once the new credential is ready.
+   */
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    const record = await this.tokens.findByRawToken(rawToken);
+    const now = new Date();
+
+    if (
+      !record ||
+      record.usedAt !== null ||
+      record.expiresAt.getTime() <= now.getTime() ||
+      (record.purpose !== 'RESET' && record.purpose !== 'INVITE')
+    ) {
+      throw new BadRequestException(RESET_LINK_INVALID_MESSAGE);
+    }
+
+    const user = await this.users.findById(record.userId);
+    if (!user || !user.isActive) {
+      throw new BadRequestException(RESET_LINK_INVALID_MESSAGE);
+    }
+
+    // Defence in depth for direct service callers; the DTO already rejects a
+    // policy-violating password before the controller runs.
+    const violation = passwordPolicyViolation(newPassword);
+    if (violation) {
+      throw new BadRequestException(violation.message);
+    }
+
+    // CPU-heavy argon2 deliberately outside the DB transaction.
+    const passwordHash = await this.hasher.hash(newPassword);
+
+    const consumed = await this.recovery.resetPassword({
+      tokenHash: record.tokenHash,
+      userId: record.userId,
+      passwordHash,
+    });
+
+    if (!consumed) {
+      // The conditional consume lost the race with another request (or the
+      // account changed after the read); exactly one concurrent reset wins.
+      throw new BadRequestException(RESET_LINK_INVALID_MESSAGE);
+    }
+  }
+
   private async sendResetEmail(user: User, rawToken: string): Promise<void> {
     const resetUrl = `${this.frontendUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
     // Rendered inside the try block on purpose: the raw token only lives in the
@@ -81,7 +148,7 @@ export class PasswordRecoveryService {
     const rendered = renderResetEmail({
       fullName: user.fullName,
       resetUrl,
-      expiresInMinutes: this.tokens.resetTtlSeconds / 60,
+      expiresInMinutes: Math.ceil(this.tokens.resetTtlSeconds / 60),
       fromAddress: this.mailFrom,
     });
 
