@@ -156,6 +156,25 @@ describe('ResetTokenService', () => {
     it('defaults to 900 seconds (15 minutes)', () => {
       expect(serviceWith().service.resetTtlSeconds).toBe(900);
     });
+
+    it('coerces process-env style string TTLs to numbers (CI sets env strings)', async () => {
+      const repository = new RecordingResetTokensRepository();
+      const config = new ConfigService({
+        INVITE_TTL_SECONDS: '86400',
+        RESET_TTL_SECONDS: '900',
+      });
+      const service = new ResetTokenService(repository, config);
+
+      expect(service.resetTtlSeconds).toBe(900);
+      expect(typeof service.resetTtlSeconds).toBe('number');
+
+      // The INVITE TTL is exercised through the issued expiry (24 h).
+      const before = Date.now();
+      const { expiresAt } = await service.issueInvite('user-1');
+      const after = Date.now();
+      expectTtl(expiresAt, before, after, 86_400);
+      expect(repository.calls[0].purpose).toBe('INVITE');
+    });
   });
 
   describe('findByRawToken', () => {

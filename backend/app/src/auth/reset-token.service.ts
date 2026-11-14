@@ -16,6 +16,31 @@ const DEFAULT_RESET_TTL_SECONDS = 900;
 /** §8.2 default when INVITE_TTL_SECONDS is not supplied by the environment. */
 const DEFAULT_INVITE_TTL_SECONDS = 86_400;
 
+/**
+ * `ConfigService` can surface environment variables as strings (CI passes
+ * `RESET_TTL_SECONDS=900` through the process environment) while the validated
+ * config object yields numbers. Coerce both forms to a positive-integer number
+ * so TTL arithmetic and the public getter stay numeric. Boot validation has
+ * already rejected bad values; throw rather than silently degrade if the
+ * service is constructed directly with an invalid one.
+ */
+function ttlSecondsFrom(
+  name: string,
+  raw: unknown,
+  fallback: number,
+): number {
+  if (raw === undefined || raw === null || raw === '') {
+    return fallback;
+  }
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return value;
+}
+
 export interface IssuedToken {
   /** Returned to the caller for the email link; never logged or stored. */
   rawToken: string;
@@ -32,10 +57,16 @@ export class ResetTokenService {
     private readonly tokens: ResetTokensRepository,
     config: ConfigService,
   ) {
-    this.inviteTtl =
-      config.get<number>('INVITE_TTL_SECONDS') ?? DEFAULT_INVITE_TTL_SECONDS;
-    this.resetTtl =
-      config.get<number>('RESET_TTL_SECONDS') ?? DEFAULT_RESET_TTL_SECONDS;
+    this.inviteTtl = ttlSecondsFrom(
+      'INVITE_TTL_SECONDS',
+      config.get('INVITE_TTL_SECONDS'),
+      DEFAULT_INVITE_TTL_SECONDS,
+    );
+    this.resetTtl = ttlSecondsFrom(
+      'RESET_TTL_SECONDS',
+      config.get('RESET_TTL_SECONDS'),
+      DEFAULT_RESET_TTL_SECONDS,
+    );
   }
 
   /**
