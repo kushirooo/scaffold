@@ -2,15 +2,15 @@
 import "../styles/user-management-dashboard.css";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   ApiError,
   createUser,
   deleteUser,
   getUsers,
-  resendWelcomeEmail,
   setUserStatus,
   updateUser,
-} from "../lib/users-api";
+} from "../users-api";
 import {
   SYSTEM_ROLES,
   USER_POSITIONS,
@@ -19,8 +19,7 @@ import {
   type ToastKind,
   type UserInput,
   type UserRecord,
-} from "../lib/user-types";
-import { Us18EmailToast } from "./us18-email-toast";
+} from "../user-types";
 
 type DialogState =
   | { kind: "create" }
@@ -34,8 +33,6 @@ type ToastState = {
   kind: ToastKind;
   title: string;
   message?: string;
-  retryUserId?: string;
-  retrying?: boolean;
 };
 
 type FormErrors = Partial<Record<keyof UserInput, string>>;
@@ -43,6 +40,7 @@ type FormErrors = Partial<Record<keyof UserInput, string>>;
 const EMPTY_FORM: UserInput = {
   name: "",
   email: "",
+  password: "",
   position: USER_POSITIONS[0],
   yearsOfExperience: 0,
   role: "Worker",
@@ -115,6 +113,7 @@ function FieldLabel({ children, required }: { children: ReactNode; required?: bo
 }
 
 export function UserManagementDashboard() {
+  const router = useRouter();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -180,20 +179,32 @@ export function UserManagementDashboard() {
       const result = await getUsers();
       setUsers(result.users);
     } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        router.replace("/dashboard");
+        return;
+      }
       setLoadError(friendlyError(error));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    void loadUsers();
+    const timeout = window.setTimeout(() => void loadUsers(), 0);
+    return () => window.clearTimeout(timeout);
   }, [loadUsers]);
 
   const clearToast = useCallback(() => setToast(null), []);
-  const showToast = useCallback((kind: ToastKind, title: string, message?: string, retryUserId?: string) => {
-    setToast({ id: `${Date.now()}-${Math.random()}`, kind, title, message, retryUserId });
+  const showToast = useCallback((kind: ToastKind, title: string, message?: string) => {
+    setToast({ id: `${Date.now()}-${Math.random()}`, kind, title, message });
   }, []);
+
+  const toastId = toast?.id;
+  useEffect(() => {
+    if (!toastId) return;
+    const timeout = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [toastId]);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -207,17 +218,10 @@ export function UserManagementDashboard() {
   }, [users, query, positionFilter, roleFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
-  const visibleUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const currentPage = Math.min(page, totalPages);
+  const visibleUsers = filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const activeCount = users.filter((user) => user.status === "Active").length;
   const inactiveCount = users.length - activeCount;
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, positionFilter, roleFilter, statusFilter]);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
 
   const openCreate = () => {
     setForm(EMPTY_FORM);
@@ -230,6 +234,7 @@ export function UserManagementDashboard() {
     setForm({
       name: user.name,
       email: user.email,
+      password: "",
       position: user.position as UserInput["position"],
       yearsOfExperience: user.yearsOfExperience ?? 0,
       role: user.role,
@@ -244,6 +249,8 @@ export function UserManagementDashboard() {
     const errors: FormErrors = {};
     if (form.name.trim().length < 2) errors.name = "Enter a name with at least 2 characters.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address.";
+    if (!editingUser && (form.password?.length ?? 0) < 12) errors.password = "Use at least 12 characters for the password.";
+    if (!editingUser && (form.password?.length ?? 0) > 1024) errors.password = "Password must not exceed 1024 characters.";
     const duplicate = users.some((user) => user.email.toLowerCase() === form.email.trim().toLowerCase() && user.id !== editingUser?.id);
     if (duplicate) errors.email = "This email address is already registered.";
     if (!form.position) errors.position = "Select an employee position.";
@@ -266,22 +273,18 @@ export function UserManagementDashboard() {
       if (dialog?.kind === "create") {
         const result = await createUser({ ...form, name: form.name.trim(), email: form.email.trim() });
         setUsers((current) => [result.user, ...current]);
+        setForm(EMPTY_FORM);
         setDialog(null);
-        if (result.welcomeEmailStatus === "sent") {
-          showToast("success", "User created successfully! Welcome email sent.");
-        } else if (result.welcomeEmailStatus === "failed") {
-          showToast(
-            "error",
-            "User created, but the welcome email could not be sent.",
-            "The account is saved. Retry the email without creating another account.",
-            result.user.id,
-          );
-        } else {
-          showToast("info", "User created; welcome email is pending confirmation.", "The account is saved. Delivery has not yet been confirmed by the backend.");
-        }
+        showToast("success", "User created successfully.");
       } else if (dialog?.kind === "edit") {
         const userId = dialog.user.id;
-        const updatedFields = { ...form, name: form.name.trim(), email: form.email.trim() };
+        const updatedFields = {
+          name: form.name.trim(),
+          email: form.email.trim(),
+          position: form.position,
+          yearsOfExperience: form.yearsOfExperience,
+          role: form.role,
+        };
         await updateUser(userId, updatedFields);
         setUsers((current) => current.map((user) => user.id === userId ? { ...user, ...updatedFields } : user));
         setDialog(null);
@@ -328,36 +331,6 @@ export function UserManagementDashboard() {
       setRowActionId(null);
     }
   };
-
-  const handleRetryEmail = useCallback(async () => {
-    const userId = toast?.retryUserId;
-    if (!userId || toast?.retrying) return;
-    setToast((current) => current ? { ...current, retrying: true } : current);
-    try {
-      const status = await resendWelcomeEmail(userId);
-      if (status === "sent") {
-        setToast({ id: `${Date.now()}`, kind: "success", title: "Welcome email sent successfully." });
-      } else if (status === "pending") {
-        setToast({ id: `${Date.now()}`, kind: "info", title: "Welcome email is still pending.", message: "The backend has not confirmed delivery yet." });
-      } else {
-        setToast({
-          id: `${Date.now()}`,
-          kind: "error",
-          title: "Welcome email retry failed.",
-          message: "The account remains active. You can retry the email again.",
-          retryUserId: userId,
-        });
-      }
-    } catch (error) {
-      setToast({
-        id: `${Date.now()}`,
-        kind: "error",
-        title: "Welcome email retry failed.",
-        message: friendlyError(error),
-        retryUserId: userId,
-      });
-    }
-  }, [toast?.retryUserId, toast?.retrying]);
 
   const renderUserActions = (user: UserRecord) => (
     <div className="flex items-center justify-end gap-1.5">
@@ -447,10 +420,10 @@ export function UserManagementDashboard() {
                   <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:p-5 xl:flex-row xl:items-center xl:justify-between">
                     <div><h2 className="text-sm font-bold text-slate-900">Registered users</h2><p className="mt-1 text-xs text-slate-500">{filteredUsers.length} {filteredUsers.length === 1 ? "account" : "accounts"} match the current filters</p></div>
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                      <div className="relative min-w-0 sm:w-56"><Icon name="search" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, email or ID" aria-label="Search users" className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-[#58779d] focus:ring-2 focus:ring-blue-100" /></div>
-                      <select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} aria-label="Filter by position" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 outline-none focus:border-[#58779d]"><option>All positions</option>{USER_POSITIONS.map((position) => <option key={position}>{position}</option>)}</select>
-                      <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="Filter by system role" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 outline-none focus:border-[#58779d]"><option>All roles</option>{SYSTEM_ROLES.map((role) => <option key={role}>{role}</option>)}</select>
-                      <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 outline-none focus:border-[#58779d]"><option>All statuses</option><option>Active</option><option>Inactive</option></select>
+                      <div className="relative min-w-0 sm:w-56"><Icon name="search" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => { setPage(1); setQuery(event.target.value); }} placeholder="Search name, email or ID" aria-label="Search users" className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition placeholder:text-slate-400 focus:border-[#58779d] focus:ring-2 focus:ring-blue-100" /></div>
+                      <select value={positionFilter} onChange={(event) => { setPage(1); setPositionFilter(event.target.value); }} aria-label="Filter by position" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 outline-none focus:border-[#58779d]"><option>All positions</option>{USER_POSITIONS.map((position) => <option key={position}>{position}</option>)}</select>
+                      <select value={roleFilter} onChange={(event) => { setPage(1); setRoleFilter(event.target.value); }} aria-label="Filter by system role" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 outline-none focus:border-[#58779d]"><option>All roles</option>{SYSTEM_ROLES.map((role) => <option key={role}>{role}</option>)}</select>
+                      <select value={statusFilter} onChange={(event) => { setPage(1); setStatusFilter(event.target.value); }} aria-label="Filter by status" className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 outline-none focus:border-[#58779d]"><option>All statuses</option><option>Active</option><option>Inactive</option></select>
                       <div className="flex items-center rounded-lg border border-slate-200 p-0.5"><button type="button" onClick={() => setViewMode("table")} aria-label="Table view" aria-pressed={viewMode === "table"} className={`rounded-md p-1.5 ${viewMode === "table" ? "bg-[#eaf0f8] text-[#18365f]" : "text-slate-400 hover:text-slate-700"}`}><Icon name="list" /></button><button type="button" onClick={() => setViewMode("cards")} aria-label="Card view" aria-pressed={viewMode === "cards"} className={`rounded-md p-1.5 ${viewMode === "cards" ? "bg-[#eaf0f8] text-[#18365f]" : "text-slate-400 hover:text-slate-700"}`}><Icon name="grid" /></button></div>
                     </div>
                   </div>
@@ -470,7 +443,7 @@ export function UserManagementDashboard() {
                     <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">{visibleUsers.map(renderUserCard)}</div>
                   )}
 
-                  {!loading && filteredUsers.length > 0 ? <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5"><p className="text-[11px] text-slate-500">Showing <span className="font-semibold text-slate-700">{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredUsers.length)}</span> of <span className="font-semibold text-slate-700">{filteredUsers.length}</span> users</p><div className="flex items-center gap-1"><button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1} className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous page"><Icon name="chevron-left" /></button><span className="px-2 text-[11px] text-slate-500">Page <strong className="text-slate-800">{page}</strong> of {totalPages}</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page === totalPages} className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next page"><Icon name="chevron-right" /></button></div></div> : null}
+                  {!loading && filteredUsers.length > 0 ? <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5"><p className="text-[11px] text-slate-500">Showing <span className="font-semibold text-slate-700">{(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredUsers.length)}</span> of <span className="font-semibold text-slate-700">{filteredUsers.length}</span> users</p><div className="flex items-center gap-1"><button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={currentPage === 1} className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous page"><Icon name="chevron-left" /></button><span className="px-2 text-[11px] text-slate-500">Page <strong className="text-slate-800">{currentPage}</strong> of {totalPages}</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={currentPage === totalPages} className="rounded-md border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next page"><Icon name="chevron-right" /></button></div></div> : null}
                 </section>
                 <p className="text-center text-[10px] text-slate-400">RAF CONSULT · Internal user administration</p>
               </>
@@ -489,8 +462,13 @@ export function UserManagementDashboard() {
       </div>
 
       {toast ? (
-        <div className="pointer-events-none fixed right-4 top-4 z-[80] flex w-[calc(100%-2rem)] max-w-md flex-col gap-2 sm:right-6 sm:top-6">
-          <Us18EmailToast key={toast.id} kind={toast.kind} title={toast.title} message={toast.message} retryLabel={toast.retryUserId ? "Retry Email" : undefined} retrying={toast.retrying} onRetry={toast.retryUserId ? handleRetryEmail : undefined} onDismiss={clearToast} />
+        <div className="fixed right-4 top-4 z-[80] w-[calc(100%-2rem)] max-w-md sm:right-6 sm:top-6">
+          <div className={`rounded-xl border bg-white p-4 shadow-xl ${toast.kind === "error" ? "border-rose-200" : toast.kind === "success" ? "border-emerald-200" : "border-blue-200"}`} role={toast.kind === "error" ? "alert" : "status"}>
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-sm font-semibold text-slate-900">{toast.title}</p>{toast.message ? <p className="mt-1 text-sm text-slate-600">{toast.message}</p> : null}</div>
+              <button type="button" onClick={clearToast} className="rounded-md px-1 text-slate-400 hover:bg-slate-100" aria-label="Dismiss notification">×</button>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -525,7 +503,8 @@ export function UserManagementDashboard() {
                 </div>
                 <label className="sm:col-span-2"><FieldLabel required>Full name</FieldLabel><input autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. John Smith" className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.name ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} />{formErrors.name ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.name}</span> : null}</label>
                 <label className="sm:col-span-2"><FieldLabel required>Email address</FieldLabel><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="name@rafconsult.my" autoComplete="email" className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.email ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} />{formErrors.email ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.email}</span> : null}</label>
-                <label className="sm:col-span-2"><FieldLabel required>Position</FieldLabel><select value={form.position} onChange={(event) => setForm((current) => ({ ...current, position: event.target.value as UserInput["position"] }))} className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.position ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`}>{USER_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}</select><span className="mt-1 block text-[10px] text-slate-400">Employee's actual job title.</span>{formErrors.position ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.position}</span> : null}</label>
+                {dialog.kind === "create" ? <label className="sm:col-span-2"><FieldLabel required>Password</FieldLabel><input type="password" value={form.password ?? ""} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} autoComplete="new-password" minLength={12} maxLength={1024} className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.password ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} />{formErrors.password ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.password}</span> : <span className="mt-1 block text-[10px] text-slate-400">At least 12 characters.</span>}</label> : null}
+                <label className="sm:col-span-2"><FieldLabel required>Position</FieldLabel><select value={form.position} onChange={(event) => setForm((current) => ({ ...current, position: event.target.value as UserInput["position"] }))} className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.position ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`}>{USER_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}</select><span className="mt-1 block text-[10px] text-slate-400">Employee&apos;s actual job title.</span>{formErrors.position ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.position}</span> : null}</label>
                 <label><FieldLabel required>Years of Experience</FieldLabel><input type="number" min="0" max="60" step="1" value={form.yearsOfExperience} onChange={(event) => setForm((current) => ({ ...current, yearsOfExperience: event.target.value === "" ? 0 : Number(event.target.value) }))} placeholder="e.g. 5" className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.yearsOfExperience ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`} /><span className="mt-1 block text-[10px] text-slate-400">Total professional working experience in years.</span>{formErrors.yearsOfExperience ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.yearsOfExperience}</span> : null}</label>
                 <label><FieldLabel required>System role</FieldLabel><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as SystemRole }))} className={`h-10 w-full rounded-lg border bg-white px-3 text-sm outline-none focus:ring-2 ${formErrors.role ? "border-rose-300 focus:ring-rose-100" : "border-slate-200 focus:border-[#58779d] focus:ring-blue-100"}`}>{SYSTEM_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}</select><span className="mt-1 block text-[10px] text-slate-400">Controls application permissions.</span>{formErrors.role ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.role}</span> : null}</label>
               </div>

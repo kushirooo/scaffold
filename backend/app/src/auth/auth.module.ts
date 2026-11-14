@@ -45,6 +45,6 @@ const JWT_AUDIENCE = 'raf-consult-portal';
     { provide: USERS_REPOSITORY, useClass: PrismaUsersRepository },
     { provide: SESSIONS_REPOSITORY, useClass: PrismaSessionsRepository },
   ],
-  exports: [AuthService, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, PasswordHasher, JwtModule],
 })
 export class AuthModule {}

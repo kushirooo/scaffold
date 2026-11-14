@@ -23,7 +23,6 @@ export const SYSTEM_ROLES = [
 export type UserPosition = (typeof USER_POSITIONS)[number];
 export type SystemRole = (typeof SYSTEM_ROLES)[number];
 export type AccountStatus = "Active" | "Inactive";
-export type EmailDeliveryStatus = "sent" | "failed" | "pending";
 
 export interface UserRecord {
   id: string;
@@ -41,15 +40,11 @@ export interface UserRecord {
 export interface UserInput {
   name: string;
   email: string;
+  password?: string;
   position: UserPosition;
   yearsOfExperience: number;
   role: SystemRole;
   profilePicture?: File | null;
-}
-
-export interface CreateUserResult {
-  user: UserRecord;
-  welcomeEmailStatus: EmailDeliveryStatus;
 }
 
 export interface ApiResult<T> {
