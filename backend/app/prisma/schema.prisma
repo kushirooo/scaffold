@@ -42,14 +42,16 @@ enum NotificationType {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  fullName     String   @map("full_name")
-  role         UserRole
-  isActive     Boolean  @default(true) @map("is_active")
-  tokenVersion Int      @default(0) @map("token_version")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String   @id @default(uuid()) @db.Uuid
+  email             String   @unique
+  fullName          String   @map("full_name")
+  position          String   @default("Clerk / Admin")
+  yearsOfExperience Int      @default(0) @map("years_of_experience")
+  role              UserRole
+  isActive          Boolean  @default(true) @map("is_active")
+  tokenVersion      Int      @default(0) @map("token_version")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   credential         Credential?
   sessions           Session[]
