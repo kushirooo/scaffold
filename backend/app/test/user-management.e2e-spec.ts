@@ -6,7 +6,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
-import { ACCESS_TOKEN_COOKIE } from '../src/auth/auth.types.js';
+import { ACCESS_TOKEN_COOKIE, RESET_LINK_INVALID_MESSAGE } from '../src/auth/auth.types.js';
 import { CSRF_HEADER } from '../src/auth/guards/csrf.guard.js';
 import {
   EMAIL_SENDER,
@@ -31,6 +31,14 @@ function cookieFrom(response: request.Response): string {
     : undefined;
   if (!accessCookie) throw new Error('Login did not set an access cookie.');
   return accessCookie.split(';')[0] ?? '';
+}
+
+/** Raw activation token from a sent welcome message (never logged). */
+function extractRawToken(message: EmailMessage | undefined): string {
+  const match = /reset-password\?token=([A-Za-z0-9_-]+)/.exec(
+    message?.text ?? '',
+  );
+  return match?.[1] ?? '';
 }
 
 /**
@@ -281,6 +289,8 @@ describe('US02 user management (e2e)', () => {
     });
     expect(tokensBefore).toHaveLength(1);
     const previous = tokensBefore[0];
+    const previousRawToken = extractRawToken(welcomeMessagesTo(input.email)[0]);
+    expect(previousRawToken).toHaveLength(43);
     expect(welcomeMessagesTo(input.email)).toHaveLength(1);
 
     const response = await request(app.getHttpServer())
@@ -290,15 +300,27 @@ describe('US02 user management (e2e)', () => {
       .expect(200);
     expect(response.body).toEqual({ status: 'sent' });
 
+    // The invalidated (used) row is pruned on the successful re-issue, so
+    // exactly one live unused INVITE row — the replacement — remains.
     const tokensAfter = await prisma.passwordResetToken.findMany({
       where: { userId: user.id, purpose: 'INVITE' },
     });
-    expect(tokensAfter).toHaveLength(2);
-    const invalidated = tokensAfter.find((token) => token.id === previous.id);
-    const replacement = tokensAfter.find((token) => token.id !== previous.id);
-    expect(invalidated?.usedAt).not.toBeNull();
+    expect(tokensAfter).toHaveLength(1);
+    expect(
+      tokensAfter.find((token) => token.id === previous.id),
+    ).toBeUndefined();
+    const replacement = tokensAfter[0];
     expect(replacement).toMatchObject({ purpose: 'INVITE', usedAt: null });
-    expect(replacement?.tokenHash).not.toBe(previous.tokenHash);
+    expect(replacement.tokenHash).not.toBe(previous.tokenHash);
+
+    // The pruned link resolves to null and still gets the generic 400, so
+    // re-issue invalidated it even though the row no longer exists.
+    const replayed = await request(app.getHttpServer())
+      .post('/auth/reset-password')
+      .set(CSRF)
+      .send({ token: previousRawToken, newPassword: 'a brand new passphrase' })
+      .expect(400);
+    expect(replayed.body.message).toBe(RESET_LINK_INVALID_MESSAGE);
 
     const welcomes = welcomeMessagesTo(input.email);
     expect(welcomes).toHaveLength(2);

@@ -20,4 +20,12 @@ export interface ResetTokensRepository {
    * as absent.
    */
   findByTokenHash(tokenHash: string): Promise<ResetTokenRecord | null>;
+
+  /**
+   * Deletes every expired row and every used row, across all users and
+   * purposes. Called after a successful issuance as best-effort housekeeping;
+   * the just-issued row (future expiry, `usedAt` null) is never matched.
+   * Returns the number of deleted rows.
+   */
+  pruneExpiredAndUsed(): Promise<number>;
 }

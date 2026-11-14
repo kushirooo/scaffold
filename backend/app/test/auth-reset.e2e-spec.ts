@@ -21,6 +21,7 @@ import {
 import { PasswordHasher } from '../src/auth/password-hasher.js';
 import { ResetTokenService } from '../src/auth/reset-token.service.js';
 import { CSRF_HEADER } from '../src/auth/guards/csrf.guard.js';
+import { FORGOT_PASSWORD_RATE_LIMIT } from '../src/auth/forgot-password-rate-limiter.js';
 import {
   EMAIL_SENDER,
   type EmailMessage,
@@ -258,6 +259,31 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       .send({ email });
   }
 
+  /**
+   * Seeds a RESET row directly (no `ResetTokenService.issueReset`), so the
+   * issuance-time prune cannot delete an expired/used fixture the test is
+   * about to inspect.
+   */
+  async function seedResetToken(
+    userId: string,
+    options: { expiresAt?: Date; usedAt?: Date | null } = {},
+  ): Promise<{ rawToken: string; tokenHash: string }> {
+    const rawToken = randomBytes(32).toString('base64url');
+    const tokenHash = sha256Hex(rawToken);
+    await prisma.passwordResetToken.create({
+      data: {
+        userId,
+        purpose: 'RESET',
+        tokenHash,
+        expiresAt:
+          options.expiresAt ??
+          new Date(Date.now() + resetTtlSeconds * 1000),
+        usedAt: options.usedAt ?? null,
+      },
+    });
+    return { rawToken, tokenHash };
+  }
+
   function expectNoSecrets(message: EmailMessage, secrets: string[]): void {
     for (const alternative of [message.html, message.text, message.subject]) {
       for (const secret of secrets) {
@@ -392,7 +418,7 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       ).resolves.toBe(0);
     });
 
-    it('issues a fresh RESET token and invalidates the previous unused one', async () => {
+    it('issues a fresh RESET token, invalidates and prunes the previous unused one', async () => {
       const user = await seedUser();
 
       await postForgot(user.email).expect(204);
@@ -404,13 +430,15 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       const secondHash = sha256Hex(extractRawToken(messages[1]));
       expect(firstHash).not.toBe(secondHash);
 
+      // Re-issue marks the previous link used, then the issuance-time prune
+      // deletes that used row; only the new, unused link remains.
       const firstRow = await prisma.passwordResetToken.findUnique({
         where: { tokenHash: firstHash },
       });
       const secondRow = await prisma.passwordResetToken.findUnique({
         where: { tokenHash: secondHash },
       });
-      expect(firstRow?.usedAt).toBeInstanceOf(Date);
+      expect(firstRow).toBeNull();
       expect(secondRow?.usedAt).toBeNull();
       await expect(
         prisma.passwordResetToken.count({
@@ -418,6 +446,47 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
         }),
       ).resolves.toBe(1);
     });
+
+    it('rate-limits repeated forgot requests per address: still 204, no extra email, no PII in the log', async () => {
+      const user = await seedUser();
+      const warnSpy = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+
+      // The allowed attempts each log 204 and send exactly one email.
+      for (
+        let attempt = 1;
+        attempt <= FORGOT_PASSWORD_RATE_LIMIT;
+        attempt += 1
+      ) {
+        const response = await postForgot(user.email).expect(204);
+        expect(response.text).toBe('');
+      }
+
+      // Over-limit attempts are indistinguishable at the HTTP layer and send
+      // nothing; no token row is issued for them either.
+      await postForgot(user.email).expect(204);
+      await postForgot(user.email).expect(204);
+
+      expect(userMessages(sender, user.email)).toHaveLength(
+        FORGOT_PASSWORD_RATE_LIMIT,
+      );
+      await expect(
+        prisma.passwordResetToken.count({
+          where: { userId: user.id, purpose: 'RESET', usedAt: null },
+        }),
+      ).resolves.toBe(1);
+
+      const rateLimited = loggedEvents(warnSpy).filter(
+        (event) => event.event === 'forgot_password_rate_limited',
+      );
+      expect(rateLimited).toHaveLength(2);
+      // The structured event carries neither the address nor a token.
+      expect(JSON.stringify(rateLimited)).not.toContain(user.email);
+      expect(JSON.stringify(rateLimited)).not.toContain(
+        '/reset-password?token=',
+      );
+    }, 20_000);
 
     it('on token-issue failure: 204, one admin alert, one safe log, no reset email', async () => {
       const user = await seedUser();
@@ -703,21 +772,17 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
 
     it('returns the same generic 400 for expired, used, unknown and inactive links', async () => {
       const expired = await seedUser();
-      const expiredToken = await tokens.issueReset(expired.id);
-      await prisma.passwordResetToken.updateMany({
-        where: { userId: expired.id },
-        data: { expiresAt: new Date(Date.now() - 60_000) },
+      const expiredToken = await seedResetToken(expired.id, {
+        expiresAt: new Date(Date.now() - 60_000),
       });
 
       const used = await seedUser();
-      const usedToken = await tokens.issueReset(used.id);
-      await prisma.passwordResetToken.updateMany({
-        where: { userId: used.id },
-        data: { usedAt: new Date(Date.now() - 60_000) },
+      const usedToken = await seedResetToken(used.id, {
+        usedAt: new Date(Date.now() - 60_000),
       });
 
       const inactive = await seedUser({ isActive: false });
-      const inactiveToken = await tokens.issueReset(inactive.id);
+      const inactiveToken = await seedResetToken(inactive.id);
       const unknownToken = randomBytes(32).toString('base64url');
 
       const cases = [

@@ -2,7 +2,7 @@
 
 **Stories:** US18 (welcome email with an activation link) and US19 (password reset, password change, password policy).
 **Owner:** Backend (implementer) · **Version:** v1 (14 November 2026)
-**Status:** Implemented in `backend/app`; local verification green (14 Nov 2026). CI and staging checks are pending.
+**Status:** Implemented in `backend/app`; local verification green (15 Nov 2026, including the STAB-US19 throttle/timing/cleanup hardening). CI and staging checks are pending.
 **Consumers:** Member 3 (portal UI), Member 4 (QA), US02 (account creation), US18 (welcome email)
 **References:** `SPRINT1_PLAN.md` §8–§9, §12; [ADR 0003](adr/0003-password-policy.md); [ADR 0004](adr/0004-email-transport.md)
 
@@ -43,6 +43,19 @@ Public. **Requires `X-MARS-CSRF: 1`.**
 - If issuing the `RESET` token or sending the email fails: the API logs a structured event
   and sends one best-effort admin alert, then still returns `204`. The alert never contains
   the token or the reset URL.
+- **Per-address throttle (STAB-US19):** in-memory sliding window, **5 requests per 15
+  minutes** per trimmed, lower-cased email. Over-limit requests still return `204`, send no
+  email, do no account lookup, and log one structured `forgot_password_rate_limited` event
+  (`{ event, windowLimit, windowMs }` — no address, no token). The window is process-local;
+  a multi-instance deployment would need a shared store.
+- **Response-time floor (STAB-US19):** every branch (known, unknown, inactive, failure)
+  waits out a **500 ms** minimum before the `204`, so response time does not distinguish a
+  registered address. A real send can take longer than the floor when provider SMTP latency
+  exceeds it — the floor equalises the fast paths, it is not a hard upper bound.
+- **Token cleanup (STAB-US19):** after a successful RESET/INVITE issuance the API prunes
+  expired and used `password_reset_tokens` rows (both purposes) as best-effort housekeeping;
+  a prune error is logged (`reset_token_prune_failed`) and never fails the request or the
+  issuance. No schema change.
 
 Malformed email or missing field — `400 Bad Request`:
 
@@ -177,8 +190,8 @@ new one does.
 - Raw token: 32 random bytes as base64url (43 characters, 256 bits).
 - At rest: only the SHA-256 hex digest is stored (`password_reset_tokens.token_hash`,
   unique). The raw token exists only in the email link.
-- Single use: consumed by a conditional update; expired/used rows are kept as history, not
-  deleted (cleanup is a later maintenance task).
+- Single use: consumed by a conditional update. Expired and used rows are pruned after every
+  successful issuance (either purpose; best-effort and fail-open — see §1 and §5).
 - Issuing a token marks the user's previous unused token **of the same purpose** as used:
   a new forgot-password request kills the previous `RESET` link but not a pending `INVITE`,
   and vice versa. A successful reset/change kills all unused links.
@@ -226,15 +239,22 @@ deviation: **met per agreed deviation, pending SM amendment** — not the litera
 
 ## 5. Known gaps and deliberate limitations
 
-- **No rate limiting** on forgot-password: unlimited requests could email-bomb a known
-  address. Add throttling before production (also a US01 gap for login).
-- **Forgot-password timing is not equalised.** Unknown/inactive emails return before any
-  token/email work; a known address does a DB write and a send. This does not change the
-  204 status but is not a timing-equalised anti-enumeration guarantee.
+- **Forgot-password throttling is process-local.** The in-memory window (5 requests / 15
+  min per address) does not coordinate across API instances; a shared store is later work.
+  Login and the welcome-email resend remain unthrottled.
+- **Targeted reset lockout is possible.** The window is keyed by the submitted address, so
+  an unauthenticated attacker can spend a victim's 5/15 min allowance and make the victim's
+  own forgot-password requests silently `204` with no email. The throttle removes the
+  unlimited email-bomb; it does not prevent targeted denial for one address. A per-IP /
+  per-client backstop is later work.
+- **The timing floor is synthetic.** Unknown and inactive addresses wait the same 500 ms
+  minimum as a known address, but a real send whose provider SMTP latency exceeds the floor
+  still returns later. It equalises the fast paths; it is not a hard upper bound.
+- **Token cleanup is best-effort.** Expired/used `password_reset_tokens` rows are pruned
+  after a successful issuance and a prune failure is logged and ignored, so cleanup can lag
+  after errors; the just-issued row (future expiry, unused) is never matched.
 - **Exact-match blocklist only.** Long favourites such as `P@ssw0rd!2026` may pass; breach
   corpus lookup (HIBP) and fuzzy matching are out of scope.
-- **No token cleanup.** Used/expired token rows are retained; a maintenance job is later
-  work.
 - **Token in the URL query string by design.** The reset page must set
   `Referrer-Policy: no-referrer`; the API never logs the token.
 - **US18 scope:** the welcome/activation email is event-driven (no public HTTP endpoint);
@@ -263,7 +283,9 @@ deviation: **met per agreed deviation, pending SM amendment** — not the litera
 
 | AC | Evidence |
 | --- | --- |
-| Forgot always `204` for known/unknown/inactive/invited; one email only for known active | `test/auth-reset.e2e-spec.ts` — forgot cases (12) |
+| Forgot always `204` for known/unknown/inactive/invited; one email only for known active | `test/auth-reset.e2e-spec.ts` — forgot cases (14, incl. throttle) |
+| Forgot throttle: 5/15 min per address, over-limit `204` + no email + PII-free log; 500 ms floor on all branches | `src/auth/forgot-password-rate-limiter.spec.ts` (window expiry/sliding, isolation, over-limit without extending the window, synchronous burst cap, sweep reclamation, bounded map, fake-timer floor on known/unknown/failure branches); e2e rate-limit case |
+| Token cleanup: expired + used rows pruned after successful RESET/INVITE issuance, fail-open, valid row survives | `src/auth/reset-token.service.spec.ts`; `test/db/password-recovery.repository.db-spec.ts` (`pruneExpiredAndUsed`) |
 | Known active: `RESET` purpose, SHA-256 at rest, `${FRONTEND_URL}/reset-password?token=…` link | E2E forgot case: stored hash = sha256(raw), 43-char token, 15-minute email |
 | Token/email send failures: log + one admin alert, still `204`, no token in alert/log | E2E: token-stage failure, send-stage failure, alert-failure no recursion |
 | Policy `12–128` after NFKC, no classes, exact blocklist (`OPEN-1` deviation) | `src/auth/password-policy.spec.ts` (16 tests), `src/auth/password-hasher.spec.ts` |
@@ -273,14 +295,14 @@ deviation: **met per agreed deviation, pending SM amendment** — not the litera
 | Old cookie and second device `401`; new cookie `/auth/me 200`; old password `401`, new `200` | E2E change success case |
 | No token/password/hash in responses or logs | E2E asserts bodies, Set-Cookie shape, `Logger.error` silence; alerts/logs checked in failure cases |
 
-Current local counts (14 November 2026, after the T10 P3 fix); the living tally and
+Current local counts (15 November 2026, after STAB-US19); the living tally and
 deferred list live in `docs/qa/verification-us19.md`. Local commands (from `backend/app`):
 
 ```bash
-npx vitest run --config ./vitest.config.e2e.ts test/auth-reset.e2e-spec.ts   # 26 passed
-npm run test:db                                                              # 43 passed
-npm test                                                                     # 151 passed
-npm run test:e2e                                                             # 56 passed
+npx vitest run --config ./vitest.config.e2e.ts test/auth-reset.e2e-spec.ts   # 27 passed
+npm run test:db                                                              # 45 passed
+npm test                                                                     # 165 passed
+npm run test:e2e                                                             # 74 passed
 npm run lint && npm run build
 ```
 
@@ -290,7 +312,10 @@ CI `api`+`web` passed on PR #4 (run `43547780234`); staging is not claimed.
 
 1. **[OPEN-1]** Scrum Master must amend US19 AC3 to the agreed 12–128 + blocklist
    deviation (or the team formally rejects it — one constant and its boundary tests change).
-2. **Rate limiting** for forgot-password (and login) before production.
-3. **Token cleanup** job for used/expired `password_reset_tokens` rows (later maintenance).
+2. **Login and welcome-email-resend throttling** remain open — STAB-US19 covers
+   forgot-password only. The resend route can email-bomb one address; login has no throttle.
+   Consistent with §5; shared-store/per-IP hardening is later work.
+3. ~~**Token cleanup** job~~ — resolved in STAB-US19 (expired/used rows pruned after a
+   successful issuance, fail-open; no scheduler needed).
 4. **Frontend**: `/reset-password` page and the `Referrer-Policy: no-referrer` header;
    `/login` remains Member 3's page.

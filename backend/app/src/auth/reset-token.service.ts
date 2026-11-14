@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   ResetTokenPurpose,
@@ -49,6 +49,7 @@ export interface IssuedToken {
 
 @Injectable()
 export class ResetTokenService {
+  private readonly logger = new Logger(ResetTokenService.name);
   private readonly inviteTtl: number;
   private readonly resetTtl: number;
 
@@ -120,6 +121,28 @@ export class ResetTokenService {
       expiresAt,
     });
 
+    await this.pruneExpiredAndUsed();
+
     return { rawToken, expiresAt };
+  }
+
+  /**
+   * Best-effort housekeeping after a successful issuance: expired and used
+   * reset-token rows are removed. Failing open is deliberate — a maintenance
+   * error must never fail issuance or the request that triggered it.
+   */
+  private async pruneExpiredAndUsed(): Promise<void> {
+    try {
+      await this.tokens.pruneExpiredAndUsed();
+    } catch (error) {
+      try {
+        this.logger.warn({
+          event: 'reset_token_prune_failed',
+          errorName: error instanceof Error ? error.name : typeof error,
+        });
+      } catch {
+        // Logging must never break issuance either.
+      }
+    }
   }
 }

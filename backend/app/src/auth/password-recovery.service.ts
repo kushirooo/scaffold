@@ -24,6 +24,12 @@ import {
   type ChangePasswordResponse,
 } from './auth.types.js';
 import { PasswordHasher } from './password-hasher.js';
+import {
+  FORGOT_PASSWORD_RATE_LIMIT,
+  FORGOT_PASSWORD_RATE_WINDOW_MS,
+  ForgotPasswordRateLimiter,
+  waitForForgotPasswordResponseFloor,
+} from './forgot-password-rate-limiter.js';
 import { passwordPolicyViolation } from './password-policy.js';
 import {
   PASSWORD_RECOVERY_REPOSITORY,
@@ -83,6 +89,7 @@ export class PasswordRecoveryService {
     private readonly hasher: PasswordHasher,
     @Inject(PASSWORD_RECOVERY_REPOSITORY)
     private readonly recovery: PasswordRecoveryRepository,
+    private readonly rateLimiter: ForgotPasswordRateLimiter,
     private readonly jwt: JwtService,
     config: ConfigService,
   ) {
@@ -96,9 +103,35 @@ export class PasswordRecoveryService {
    * US19 §9.1: always resolves. Unknown and inactive accounts are a silent
    * no-op, so the endpoint cannot be used to enumerate accounts. Token-issue
    * and email-send failures are logged and alerted, never rethrown.
+   *
+   * Two anti-enumeration gates wrap the work: repeated attempts for one
+   * normalised address are counted (over-limit attempts stay a `204` no-op with
+   * no email and no lookup), and every branch — known, unknown, failed — waits
+   * out the same minimum response duration so response time does not leak
+   * account existence.
    */
   async forgotPassword(email: string): Promise<void> {
-    const user = await this.users.findActiveByEmail(email);
+    const startedAt = Date.now();
+    try {
+      await this.processForgotPassword(email.trim().toLowerCase());
+    } finally {
+      await waitForForgotPasswordResponseFloor(startedAt);
+    }
+  }
+
+  private async processForgotPassword(normalisedEmail: string): Promise<void> {
+    if (this.rateLimiter.record(normalisedEmail) === 'limited') {
+      // Structured event with neither the address nor a token; the response is
+      // still 204 and no email is sent, exactly like the unknown-account path.
+      this.logger.warn({
+        event: 'forgot_password_rate_limited',
+        windowLimit: FORGOT_PASSWORD_RATE_LIMIT,
+        windowMs: FORGOT_PASSWORD_RATE_WINDOW_MS,
+      });
+      return;
+    }
+
+    const user = await this.users.findActiveByEmail(normalisedEmail);
 
     if (!user) {
       return;
