@@ -273,14 +273,14 @@ deviation: **met per agreed deviation, pending SM amendment** — not the litera
 | Old cookie and second device `401`; new cookie `/auth/me 200`; old password `401`, new `200` | E2E change success case |
 | No token/password/hash in responses or logs | E2E asserts bodies, Set-Cookie shape, `Logger.error` silence; alerts/logs checked in failure cases |
 
-Counts below are as of 14 November 2026; T7 expands the e2e matrix and the living tally
-lives in `docs/qa/verification-us19.md`. Local commands (from `backend/app`):
+Current local counts (14 November 2026, after the T10 P3 fix); the living tally and
+deferred list live in `docs/qa/verification-us19.md`. Local commands (from `backend/app`):
 
 ```bash
-npx vitest run --config ./vitest.config.e2e.ts test/auth-reset.e2e-spec.ts   # 22 passed
-npm run test:db                                                              # 42 passed
+npx vitest run --config ./vitest.config.e2e.ts test/auth-reset.e2e-spec.ts   # 26 passed
+npm run test:db                                                              # 43 passed
 npm test                                                                     # 150 passed
-npm run test:e2e                                                             # 52 passed
+npm run test:e2e                                                             # 56 passed
 npm run lint && npm run build
 ```
 

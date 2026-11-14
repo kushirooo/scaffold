@@ -5,7 +5,8 @@ Monorepo scaffold for the G10-MARS Sprint 1 build: **NestJS 12 API** (`backend/a
 ## Sprint 1 status
 
 - **US01 — login, logout, sessions, route guard:** API reconciled to the locked design — httpOnly `mars_at` cookie, `tokenVersion` invalidation, required `X-MARS-CSRF` header, credentialed exact-origin CORS. Contract: [docs/api-contract-us01.md](docs/api-contract-us01.md) (v2). The frontend login page and the 401/role redirects are Member 3's remaining integration; the API returns `redirectTo: "/dashboard"` for every role.
-- **US18 / US19:** schema and password-hashing foundation in place; email and reset endpoints not started.
+- **US18 / US19:** US18 backend (email module, welcome-email seam, hashed INVITE tokens) and US19 backend (forgot/reset/change-password, 12–128 NFKC policy, bundled blocklist, session and `tokenVersion` invalidation) are implemented and locally verified. Contract: [docs/api-contract-us18-us19.md](docs/api-contract-us18-us19.md); evidence: [docs/qa/verification-us19.md](docs/qa/verification-us19.md). The US19 password-recovery pages are aligned on `fix/us19-frontend-contract`.
+- **Integration baseline:** `main` is not a demoable build yet. US01's login/dashboard pages are stubs (Member 3), US02 has no backend, US18's frontend is not merged, and staging is not deployed. US18 AC1 remains seam-tested only.
 - **Landing shell:** not started.
 
 ## Quick start (API)
@@ -19,7 +20,7 @@ npm run db:setup          # migrations + six demo accounts
 npm run start:dev
 ```
 
-Demo password: `SEED_PASSWORD` (default `RafConsult!2026`). Seeded accounts: `admin@`, `pm@`, `worker@`, `viewer@`, `inactive@`, `invited@` — the invited account has no password until the activation flow lands.
+Demo password: `SEED_PASSWORD` (default `RafConsult!2026`). Seeded accounts: `admin@`, `pm@`, `worker@`, `viewer@`, `inactive@`, `invited@` — the invited account has no password until it uses an activation/reset link. `RESET_TTL_SECONDS` defaults to 900 (15 minutes).
 
 Local PostgreSQL 18 is exposed on `127.0.0.1:5432` (database `raf_pms`). The Compose volume must mount `/var/lib/postgresql` — PostgreSQL 18+ uses a versioned subdirectory and will not start with the old `/var/lib/postgresql/data` mount.
 
@@ -42,7 +43,7 @@ Both test suites migrate and seed their own database; the e2e guard refuses to r
 
 ## Manual API checks (Postman)
 
-Import [docs/http/us01.postman_collection.json](docs/http/us01.postman_collection.json), set the collection variable `password` to the value of `SEED_PASSWORD`, and run the requests top to bottom. Postman stores the httpOnly cookie automatically; the collection tests the cookie flags, CSRF 403, CORS preflight, logout revocation and the old-cookie 401.
+Import [docs/http/us01.postman_collection.json](docs/http/us01.postman_collection.json), set the collection variable `password` to the value of `SEED_PASSWORD`, and run the requests top to bottom. Postman stores the httpOnly cookie automatically; the collection tests the cookie flags, CSRF 403, CORS preflight, logout revocation and the old-cookie 401. For the US18/US19 flow (forgot → reset → login → change), use [docs/http/sprint1.http](docs/http/sprint1.http) with a cookie-jar HTTP client and paste the Mailtrap token into the variable.
 
 ## Repository layout
 

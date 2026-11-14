@@ -38,11 +38,12 @@ Rev 4 suggests a 15-character floor for single-factor passwords; the agreed floo
 
 - Policy validation runs in a custom `@IsPassword()` validator **before** hashing, so an
   oversized body never reaches argon2; the DTO rejects it first.
-- The blocklist is SecLists `10-million-password-list-top-10000.txt`, copied into
-  `src/auth/data/`, committed (not fetched at runtime), loaded once at module init into a
-  `Set<string>` and exact-matched. Attribution lives in
-  [`docs/third-party-notices.md`](../third-party-notices.md); the file is not bundled yet,
-  so that notice is a stub.
+- The blocklist is SecLists `10k-most-common.txt` (the sprint plan's original filename is
+  retired upstream), pinned at commit `913b327317496d062bcc7cace524aaad8a693be2` and copied
+  byte-for-byte into `src/auth/data/`, committed (not fetched at runtime), loaded once at
+  module init into a `Set<string>` and exact-matched. Attribution, checksums and the MIT
+  licence are recorded in [`docs/third-party-notices.md`](../third-party-notices.md); the
+  notice is complete.
 - Failure is a single policy message per violation (`Password must be at least 12
   characters`, `This password is too common`); no message reveals which fields exist.
 - The 10-character floor is **not** implemented pre-emptively. If the team formally
