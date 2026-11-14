@@ -49,6 +49,7 @@ jobs:
       MAIL_FROM: "RAF CONSULT MARS <no-reply@rafconsult.test>"
       ADMIN_ALERT_EMAIL: admin@rafconsult.test
       INVITE_TTL_SECONDS: 86400
+      RESET_TTL_SECONDS: 900
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

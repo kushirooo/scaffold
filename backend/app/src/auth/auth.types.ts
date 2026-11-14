@@ -35,6 +35,15 @@ export interface LoginResult {
   response: LoginResponse;
 }
 
+/**
+ * US19 §7.7 change-password response. The rotated JWT travels only in the
+ * httpOnly `Set-Cookie` header, never in this body.
+ */
+export interface ChangePasswordResponse {
+  user: AuthenticatedUser;
+  expiresIn: number;
+}
+
 export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
   sessionId?: string;
@@ -45,3 +54,10 @@ export const INVALID_SESSION_MESSAGE = 'Session is no longer valid';
 export const MISSING_TOKEN_MESSAGE = 'Authentication required';
 export const INVALID_TOKEN_MESSAGE = 'Invalid or expired access token';
 export const MISSING_CSRF_MESSAGE = 'Missing or invalid CSRF header';
+
+/**
+ * US19 §9.1: one body for every invalid reset link (expired, used, unknown,
+ * wrong purpose, inactive user), so the endpoint never reveals which.
+ */
+export const RESET_LINK_INVALID_MESSAGE =
+  'This password reset link is invalid or has expired.';

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { EmailModule } from '../email/email.module.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { PrismaResetTokensRepository } from '../reset-tokens/prisma-reset-tokens.repository.js';
 import { RESET_TOKENS_REPOSITORY } from '../reset-tokens/reset-tokens.repository.js';
@@ -13,6 +14,9 @@ import { AuthCookies } from './auth.cookies.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { PasswordHasher } from './password-hasher.js';
+import { PrismaPasswordRecoveryRepository } from './prisma-password-recovery.repository.js';
+import { PASSWORD_RECOVERY_REPOSITORY } from './password-recovery.repository.js';
+import { PasswordRecoveryService } from './password-recovery.service.js';
 import { ResetTokenService } from './reset-token.service.js';
 
 const JWT_ISSUER = 'raf-consult-pms';
@@ -21,6 +25,8 @@ const JWT_AUDIENCE = 'raf-consult-portal';
 @Module({
   imports: [
     PrismaModule,
+    // US19 reset emails use the transport-independent EmailService.
+    EmailModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -51,7 +57,12 @@ const JWT_AUDIENCE = 'raf-consult-portal';
       provide: RESET_TOKENS_REPOSITORY,
       useClass: PrismaResetTokensRepository,
     },
+    {
+      provide: PASSWORD_RECOVERY_REPOSITORY,
+      useClass: PrismaPasswordRecoveryRepository,
+    },
     ResetTokenService,
+    PasswordRecoveryService,
   ],
   exports: [AuthService, JwtAuthGuard, ResetTokenService],
 })

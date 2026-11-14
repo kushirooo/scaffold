@@ -44,6 +44,19 @@ export class PrismaUsersRepository implements UsersRepository {
     return { ...mapUser(record), passwordHash };
   }
 
+  /**
+   * US19 password recovery: resolves an active account by email regardless of
+   * whether a credential exists, so invited accounts can set a password.
+   * Inactive accounts are absent, matching "no email is sent" on forgot.
+   */
+  async findActiveByEmail(email: string): Promise<User | null> {
+    const record = await this.prisma.user.findUnique({
+      where: { email: normaliseEmail(email), isActive: true },
+    });
+
+    return record ? mapUser(record) : null;
+  }
+
   async findById(id: string): Promise<User | null> {
     const record = await this.prisma.user.findUnique({ where: { id } });
     return record ? mapUser(record) : null;

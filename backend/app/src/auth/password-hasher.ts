@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { argon2id, hash, verify, type HashOptions } from 'argon2';
+import { normalisePassword } from './password-policy.js';
 
 /**
  * OWASP Password Storage Cheat Sheet baseline for argon2id (19 MiB, t=2, p=1).
@@ -14,13 +15,21 @@ const HASH_OPTIONS: HashOptions = {
 
 @Injectable()
 export class PasswordHasher {
+  /**
+   * Hashes the NFKC-normalised form, the same form the policy measured and the
+   * seed/reset flows accepted, so every writer agrees on the bytes hashed.
+   */
   hash(password: string): Promise<string> {
-    return hash(password, HASH_OPTIONS);
+    return hash(normalisePassword(password), HASH_OPTIONS);
   }
 
+  /**
+   * Verifies against the same normalised form, so a password typed in an
+   * equivalent Unicode form (NFC/NFD, fullwidth) still logs in (ADR 0003).
+   */
   async verify(passwordHash: string, password: string): Promise<boolean> {
     try {
-      return await verify(passwordHash, password);
+      return await verify(passwordHash, normalisePassword(password));
     } catch {
       return false;
     }

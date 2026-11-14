@@ -12,6 +12,8 @@ const OLD_HASH = 'a'.repeat(64);
 const NEW_HASH = 'b'.repeat(64);
 const RESET_HASH = 'c'.repeat(64);
 const OTHER_USER_HASH = 'd'.repeat(64);
+const INVITE_HASH = 'e'.repeat(64);
+const UNKNOWN_HASH = 'f'.repeat(64);
 
 describe('PrismaResetTokensRepository (real PostgreSQL)', () => {
   let prisma: PrismaService;
@@ -162,5 +164,112 @@ describe('PrismaResetTokensRepository (real PostgreSQL)', () => {
     });
     expect(oldRow).not.toBeNull();
     expect(oldRow?.usedAt).toBeInstanceOf(Date);
+  });
+
+  it('invalidates the previous unused RESET without touching a live INVITE', async () => {
+    const user = await createUserFixture(prisma);
+    await repository.replaceUnused({
+      userId: user.id,
+      purpose: 'INVITE',
+      tokenHash: INVITE_HASH,
+      expiresAt: futureDate(),
+    });
+    await repository.replaceUnused({
+      userId: user.id,
+      purpose: 'RESET',
+      tokenHash: OLD_HASH,
+      expiresAt: futureDate(15 * 60 * 1000),
+    });
+
+    await repository.replaceUnused({
+      userId: user.id,
+      purpose: 'RESET',
+      tokenHash: NEW_HASH,
+      expiresAt: futureDate(15 * 60 * 1000),
+    });
+
+    const previousReset = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash: OLD_HASH },
+    });
+    const liveReset = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash: NEW_HASH },
+    });
+    const invite = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash: INVITE_HASH },
+    });
+    expect(previousReset?.usedAt).toBeInstanceOf(Date);
+    expect(liveReset).not.toBeNull();
+    expect(liveReset?.usedAt).toBeNull();
+    expect(invite?.usedAt).toBeNull();
+  });
+
+  describe('findByTokenHash', () => {
+    it('returns the stored row mapped to the domain record', async () => {
+      const user = await createUserFixture(prisma);
+      const expiresAt = futureDate(15 * 60 * 1000);
+      await repository.replaceUnused({
+        userId: user.id,
+        purpose: 'RESET',
+        tokenHash: RESET_HASH,
+        expiresAt,
+      });
+
+      const record = await repository.findByTokenHash(RESET_HASH);
+
+      expect(record).toEqual({
+        id: expect.any(String),
+        userId: user.id,
+        tokenHash: RESET_HASH,
+        purpose: 'RESET',
+        expiresAt,
+        usedAt: null,
+      });
+    });
+
+    it('returns null for an unknown hash', async () => {
+      const user = await createUserFixture(prisma);
+      await repository.replaceUnused({
+        userId: user.id,
+        purpose: 'RESET',
+        tokenHash: RESET_HASH,
+        expiresAt: futureDate(),
+      });
+
+      await expect(
+        repository.findByTokenHash(UNKNOWN_HASH),
+      ).resolves.toBeNull();
+    });
+
+    it('returns used and expired rows so the caller decides validity', async () => {
+      const user = await createUserFixture(prisma);
+      // A second INVITE invalidates the first.
+      await repository.replaceUnused({
+        userId: user.id,
+        purpose: 'INVITE',
+        tokenHash: OLD_HASH,
+        expiresAt: futureDate(),
+      });
+      await repository.replaceUnused({
+        userId: user.id,
+        purpose: 'INVITE',
+        tokenHash: INVITE_HASH,
+        expiresAt: futureDate(),
+      });
+      // An expired RESET row is left untouched (no newer RESET is issued).
+      await repository.replaceUnused({
+        userId: user.id,
+        purpose: 'RESET',
+        tokenHash: RESET_HASH,
+        expiresAt: pastDate(),
+      });
+
+      const used = await repository.findByTokenHash(OLD_HASH);
+      expect(used?.usedAt).toBeInstanceOf(Date);
+
+      const expired = await repository.findByTokenHash(RESET_HASH);
+      expect(expired).not.toBeNull();
+      expect(expired?.usedAt).toBeNull();
+      expect(expired?.expiresAt.getTime()).toBeLessThan(Date.now());
+    });
   });
 });
