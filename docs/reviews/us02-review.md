@@ -24,3 +24,26 @@ Findings (order = severity):
 6. `docs/api-contract-us02.md:88-112` — **NIT** — contract omits responses the code returns: `404 USER_NOT_FOUND` for `PATCH /users/:id/status` and `400` invalid-UUID for the resend `ParseUUIDPipe` (and `DELETE`). Fix: add the missing rows for parity.
 
 No findings on: token/password/hash exposure (resend body is exactly `{status:"sent"}`, logs carry ids only), auth/CSRF on the new route (global `CsrfGuard` + class admin guard, 403 proven), error non-enumeration, scope (no schema/migration/dependency/frontend change), or test tautology in the create/list/resend/delete assertions.
+
+## 2026-11-15 — task-4 UI adversarial review (kanban k336)
+
+| Field | Value |
+|---|---|
+| Tree | `stabilize/stab-us02-ui` working tree vs `5ca5da3` (uncommitted; Lead owns the commit) |
+| Files | `app/users/*`, `components/{admin-guard,navbar}.tsx`, `components/users/*`, `lib/{users-api,user-admin}.ts`, `lib/user-admin.test.mjs`, `types/users.ts`, `app/user-management/page.tsx`, `package.json`, both US02 docs, `README.md` |
+| Checks | read-only `git diff`/`status` + source/doc read; `npm test` (frontend) → 11/11 pass; no build/serve (Lead smoke log 23/23 PASS); no source edited |
+| **Verdict** | **PASS WITH CHANGES** — 1 MINOR, 4 NIT; no blocking findings |
+
+Findings (order = severity):
+
+1. `frontend/app/components/users/user-management-dashboard.tsx:299-306,353-358` — **MINOR** — edit/status handlers replace the row with the PATCH response, and the API builds that body with `toPublicUser` on the transaction result with no `sessions` include (`backend/app/src/users/user-management.service.ts:222,265`), so `lastActiveAt` is always `null`: "Last active" flips to "Never" after any edit or status change until refresh. Fix: keep the previous row's `lastActiveAt` when merging, or include sessions in those API responses.
+
+2. `docs/api-contract-us02.md:52` — **NIT** — §2 says `GET /users/roles` is "the static permission matrix the UI uses to render role options", but the shipped UI never calls it (`lib/users-api.ts` has no roles fetcher; the dashboard hardcodes `SYSTEM_ROLES`/`PERMISSIONS`). Fix: consume it or correct the wording.
+
+3. `docs/api-contract-us02.md:175-176` — **NIT** — says the "users API client redirects a 401"; the redirect is in the dashboard (`user-management-dashboard.tsx:186-190,199`), not `lib/users-api.ts`. Reword.
+
+4. `docs/api-contract-us02.md:5` — **NIT** — Consumers still names the portal UI as `/user-management`; the UI now consumes at `/users` (legacy path 308-redirects). Update.
+
+5. `docs/qa/verification-us02.md:5-9` — **NIT** — header Owner/Revision still name task-1/`stabilize/stab-us02-api`/`b32e1dc` and Status says "browser smoke deferred to the Lead", while the appended Lead-smoke section reports 23/23 PASS; update the header to cover task-3/`stabilize/stab-us02-ui` and the finished smoke.
+
+Verified clean (no findings): admin gate + navbar (worker "Access Denied", no `GET /users`, no loop), exactly one `/auth/me` per guarded navigation, async welcome-toast wording + Resend, 502/409/409 API messages and retry, contract §1 field mapping, no new dependency/`any`/suppression, no dead prototype imports, no scope creep.

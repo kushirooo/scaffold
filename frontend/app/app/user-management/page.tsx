@@ -1,5 +1,9 @@
-import UserManagementDashboard from "../../user-management/components/user-management-dashboard";
+import { permanentRedirect } from 'next/navigation';
 
-export default function UserManagementPage() {
-  return <UserManagementDashboard />;
+/**
+ * Legacy US02 route. Old links and bookmarks keep working via a permanent (308)
+ * redirect to the admin user-management route.
+ */
+export default function LegacyUserManagementPage(): never {
+  return permanentRedirect('/users');
 }

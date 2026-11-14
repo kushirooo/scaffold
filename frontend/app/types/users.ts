@@ -1,3 +1,10 @@
+/**
+ * US02 user-management types for the portal UI.
+ *
+ * These mirror the API contract (`docs/api-contract-us02.md` §1): the API sends
+ * role labels and an "Active"/"Inactive" status, and this layer only ever sees
+ * the mapped UI shape produced by `lib/user-admin.ts`.
+ */
 
 export const USER_POSITIONS = [
   "Principal",
@@ -13,6 +20,7 @@ export const USER_POSITIONS = [
   "Coordinator B.I.M.",
 ] as const;
 
+/** Role labels exactly as `GET /users` returns them (DB enum → label). */
 export const SYSTEM_ROLES = [
   "Admin",
   "Project Manager",
@@ -30,34 +38,20 @@ export interface UserRecord {
   email: string;
   position: UserPosition | string;
   yearsOfExperience: number;
-  profilePictureUrl?: string | null;
   role: SystemRole;
   status: AccountStatus;
   joinedAt: string;
   lastActiveAt: string | null;
 }
 
+/** Form input. `password` is required on create and ignored on update. */
 export interface UserInput {
   name: string;
   email: string;
   password?: string;
-  position: UserPosition;
+  position: UserPosition | string;
   yearsOfExperience: number;
   role: SystemRole;
-  profilePicture?: File | null;
-}
-
-export interface ApiResult<T> {
-  data: T;
-  demo: boolean;
 }
 
 export type ToastKind = "success" | "error" | "info";
-
-export interface ToastMessage {
-  id: string;
-  kind: ToastKind;
-  title: string;
-  message?: string;
-  retryLabel?: string;
-}
