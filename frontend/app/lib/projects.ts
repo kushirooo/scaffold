@@ -6,7 +6,6 @@
  * restore window and the `ApiError` shape all mirror the API contract
  * (`docs/api-contract-us03-us04.md`) and the backend's 30-day restore rule.
  */
-import type { ProjectNotification } from '@/types/project';
 
 /** The API restores an archived project for 30 days after `archivedAt`. */
 export const RESTORE_WINDOW_DAYS = 30;
@@ -61,6 +60,11 @@ export function isRestoreExpired(
 /**
  * Screen copy for an archived card: the deadline while restorable, the exact
  * expiry date after that, and an honest fallback when `archivedAt` is missing.
+ *
+ * The date is UTC-formatted and explicitly labelled `UTC`: the deadline is an
+ * instant (`archivedAt + 30 days`), so a local-time label could read a day
+ * early for archives created outside UTC office hours. A UTC label is honest
+ * and keeps the `node --test` suite independent of the machine time zone.
  */
 export function restoreStatusLabel(
   archivedAt: string | null | undefined,
@@ -70,8 +74,8 @@ export function restoreStatusLabel(
   if (!deadline) return 'Restore deadline unavailable';
   const formatted = DEADLINE_FORMATTER.format(deadline);
   return isRestoreExpired(archivedAt, now)
-    ? `Restore window expired on ${formatted}`
-    : `Restorable until ${formatted}`;
+    ? `Restore window expired on ${formatted} UTC`
+    : `Restorable until ${formatted} UTC`;
 }
 
 /** Screen-ready failure shape for the create/edit forms and archived cards. */
@@ -113,17 +117,4 @@ export function toProjectApiError(
     message: headline ?? (details.length > 0 ? details.join(' ') : fallback),
     details,
   };
-}
-
-/**
- * Apply a successful `POST /notifications/read-all` locally: unread rows get
- * the same `readAt`, already-read rows keep their first timestamp.
- */
-export function applyReadAll(
-  notifications: ProjectNotification[],
-  readAt: string,
-): ProjectNotification[] {
-  return notifications.map((notification) =>
-    notification.readAt === null ? { ...notification, readAt } : notification,
-  );
 }

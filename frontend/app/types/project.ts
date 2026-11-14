@@ -8,11 +8,12 @@
 export type ProjectStatus = 'Active' | 'On Hold' | 'Completed';
 export type ProjectRole = 'Owner' | 'Member' | 'Contributor';
 
-export interface User {
+/** `GET /projects/assignable-workers` element (§3). */
+export interface ProjectAssignableUser {
   id: string;
   name: string;
   email: string;
-  systemRole: string;
+  systemRole: 'WORKER';
 }
 
 export interface ProjectMember {

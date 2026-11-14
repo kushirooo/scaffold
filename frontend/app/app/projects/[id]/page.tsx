@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Project, ProjectRole, User } from '@/types/project';
+import { Project, ProjectAssignableUser, ProjectRole } from '@/types/project';
 import {
   fetchProject,
   fetchAssignableWorkers,
@@ -18,7 +18,7 @@ export default function ProjectDetailsPage({
 }) {
   const [projectId, setProjectId] = useState<string>('');
   const [project, setProject] = useState<Project | null>(null);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<ProjectAssignableUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<ProjectRole>('Member');
   const [loading, setLoading] = useState<boolean>(true);

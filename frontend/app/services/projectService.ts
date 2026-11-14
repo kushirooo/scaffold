@@ -4,10 +4,10 @@ import {
   NotificationsReadAllResponse,
   Project,
   ProjectMember,
+  ProjectAssignableUser,
   ProjectNotification,
   ProjectRole,
   UpdateProjectInput,
-  User,
 } from '@/types/project';
 
 export async function fetchProjects(): Promise<Project[]> {
@@ -61,8 +61,8 @@ export async function restoreProject(id: string): Promise<Project> {
   });
 }
 
-export async function fetchAssignableWorkers(): Promise<User[]> {
-  return apiRequest<User[]>('/projects/assignable-workers');
+export async function fetchAssignableWorkers(): Promise<ProjectAssignableUser[]> {
+  return apiRequest<ProjectAssignableUser[]>('/projects/assignable-workers');
 }
 
 export async function assignProjectMember(projectId: string, userId: string, role: ProjectRole): Promise<ProjectMember> {

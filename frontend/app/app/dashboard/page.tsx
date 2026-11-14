@@ -9,7 +9,6 @@ import {
   markNotificationRead,
 } from '@/services/projectService';
 import { ApiError } from '@/lib/api';
-import { applyReadAll } from '@/lib/projects';
 import { useSession } from '@/components/session-provider';
 import type { Project, ProjectNotification } from '@/types/project';
 
@@ -79,12 +78,12 @@ export default function DashboardPage() {
     setNotificationError(null);
     setMarkingAll(true);
     try {
-      const { updated } = await markAllNotificationsRead();
-      // The response only carries a count, so stamp the rows the API just
-      // marked; already-read rows keep their first timestamp.
-      if (updated > 0) {
-        setNotifications((current) => applyReadAll(current, new Date().toISOString()));
-      }
+      await markAllNotificationsRead();
+      // Any 2xx is success, including `{ updated: 0 }` when another tab has
+      // already read the rows: reconcile from the server so the badge and row
+      // buttons never keep stale unread state (and no client clock is stamped
+      // into `readAt`).
+      setNotifications(await fetchProjectNotifications());
     } catch (error) {
       setNotificationError(
         error instanceof ApiError ? error.message : 'Unable to mark all notifications as read.',
@@ -231,7 +230,7 @@ export default function DashboardPage() {
                           <button
                             type="button"
                             onClick={() => void handleMarkRead(notification.id)}
-                            disabled={markingId === notification.id || markingAll}
+                            disabled={markingId !== null || markingAll}
                             className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-navy transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {markingId === notification.id ? 'Marking…' : 'Mark as read'}

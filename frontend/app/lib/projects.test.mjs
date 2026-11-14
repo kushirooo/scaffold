@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { ApiError } from './api.ts';
 import {
   RESTORE_WINDOW_DAYS,
-  applyReadAll,
   formatCurrency,
   isRestoreExpired,
   restoreDeadline,
@@ -54,11 +54,11 @@ test('restore window is still open at the deadline instant and closed 1ms after'
 test('archived card copy names the deadline, the expiry, or an honest fallback', () => {
   assert.equal(
     restoreStatusLabel(ARCHIVED_AT, new Date('2026-11-20T00:00:00.000Z')),
-    'Restorable until 15 Dec 2026',
+    'Restorable until 15 Dec 2026 UTC',
   );
   assert.equal(
     restoreStatusLabel(ARCHIVED_AT, new Date('2026-12-16T00:00:00.000Z')),
-    'Restore window expired on 15 Dec 2026',
+    'Restore window expired on 15 Dec 2026 UTC',
   );
   assert.equal(restoreStatusLabel(null), 'Restore deadline unavailable');
 });
@@ -108,6 +108,14 @@ test('prefers an ApiError-style details array and keeps its headline', () => {
   });
 });
 
+test('keeps details and headline from a real ApiError', () => {
+  const error = new ApiError('Validation failed', 400, 'VALIDATION_ERROR', ['a', 'b']);
+  assert.deepEqual(toProjectApiError(error, 'Failed to update project.'), {
+    message: 'Validation failed',
+    details: ['a', 'b'],
+  });
+});
+
 test('falls back for unknown failures instead of leaking a raw shape', () => {
   for (const value of [null, undefined, 'boom', 404, { status: 500 }]) {
     assert.deepEqual(toProjectApiError(value, 'Something went wrong.'), {
@@ -116,36 +124,4 @@ test('falls back for unknown failures instead of leaking a raw shape', () => {
     });
   }
   // Inverted logic (fallback always used, or details dropped) fails above.
-});
-
-test('applyReadAll marks only unread notifications and keeps first readAt', () => {
-  const notifications = [
-    {
-      id: 'n1',
-      type: 'PROJECT_ASSIGNED',
-      title: 'Assigned',
-      message: 'You were assigned.',
-      projectId: 'p1',
-      projectName: 'Project one',
-      readAt: null,
-      createdAt: '2026-11-15T00:00:00.000Z',
-    },
-    {
-      id: 'n2',
-      type: 'PROJECT_ASSIGNED',
-      title: 'Assigned',
-      message: 'You were assigned.',
-      projectId: 'p2',
-      projectName: 'Project two',
-      readAt: '2026-11-14T10:00:00.000Z',
-      createdAt: '2026-11-14T00:00:00.000Z',
-    },
-  ];
-  const readAt = '2026-11-16T09:30:00.000Z';
-  const updated = applyReadAll(notifications, readAt);
-
-  assert.equal(updated[0].readAt, readAt);
-  assert.equal(updated[1].readAt, '2026-11-14T10:00:00.000Z');
-  // The input list is not mutated.
-  assert.equal(notifications[0].readAt, null);
 });
