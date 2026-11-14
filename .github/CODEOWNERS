@@ -1,0 +1,9 @@
+# Default owner until every teammate's GitHub handle is known.
+# Replace these entries with the real handles; unknown users are ignored by GitHub.
+* @kushirooo
+
+# Write-scope owners (placeholders for now).
+/backend/app/prisma/    @kushirooo
+/backend/app/src/auth/  @kushirooo
+/backend/app/src/users/ @kushirooo
+/frontend/              @kushirooo
