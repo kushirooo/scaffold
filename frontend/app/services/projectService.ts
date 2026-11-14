@@ -1,5 +1,4 @@
 import { apiRequest } from '@/lib/api';
-import type { CurrentUser } from '@/types/auth';
 import {
   Project,
   ProjectMember,
@@ -19,11 +18,6 @@ export async function fetchArchivedProjects(): Promise<Project[]> {
 
 export async function fetchProject(id: string): Promise<Project> {
   return apiRequest<Project>(`/projects/${encodeURIComponent(id)}`);
-}
-
-export async function fetchCurrentUser(): Promise<CurrentUser> {
-  const result = await apiRequest<{ user: CurrentUser }>('/auth/me');
-  return result.user;
 }
 
 export async function fetchAssignedProjects(): Promise<Project[]> {

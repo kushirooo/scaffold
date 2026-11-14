@@ -2,40 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  fetchAssignedProjects,
-  fetchCurrentUser,
-  fetchProjectNotifications,
-} from '@/services/projectService';
-import type { CurrentUser } from '@/types/auth';
+import { fetchAssignedProjects, fetchProjectNotifications } from '@/services/projectService';
 import { ApiError } from '@/lib/api';
+import { useSession } from '@/components/session-provider';
 import type { Project, ProjectNotification } from '@/types/project';
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const { user } = useSession();
   const [projects, setProjects] = useState<Project[]>([]);
   const [notifications, setNotifications] = useState<ProjectNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(user?.role === 'WORKER');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user || user.role !== 'WORKER') return;
     let cancelled = false;
 
     const loadDashboard = async () => {
       try {
-        const currentUser = await fetchCurrentUser();
+        const [assignedProjects, userNotifications] = await Promise.all([
+          fetchAssignedProjects(),
+          fetchProjectNotifications(),
+        ]);
         if (cancelled) return;
-        setUser(currentUser);
-
-        if (currentUser.role === 'WORKER') {
-          const [assignedProjects, userNotifications] = await Promise.all([
-            fetchAssignedProjects(),
-            fetchProjectNotifications(),
-          ]);
-          if (cancelled) return;
-          setProjects(assignedProjects);
-          setNotifications(userNotifications);
-        }
+        setProjects(assignedProjects);
+        setNotifications(userNotifications);
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(
@@ -51,7 +42,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user]);
 
   if (loading) {
     return <main className="p-8 text-center text-slate-500">Loading dashboard…</main>;

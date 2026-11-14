@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { getMe, login } from '@/services/authService';
 import { isUnauthorized } from '@/lib/api';
+import { safeNextPath } from '@/lib/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,9 +18,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Read ?next from window.location so this page needs no Suspense boundary.
+    const next = safeNextPath(
+      new URLSearchParams(window.location.search).get('next'),
+      '/dashboard',
+    );
     void getMe()
       .then(() => {
-        if (!cancelled) router.replace('/dashboard');
+        if (!cancelled) router.replace(next);
       })
       .catch(() => {
         if (!cancelled) setCheckingSession(false);
@@ -42,8 +48,11 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const result = await login(email, password);
-      router.replace(result.redirectTo || '/dashboard');
-      router.refresh();
+      const next = safeNextPath(
+        new URLSearchParams(window.location.search).get('next'),
+        result.redirectTo || '/dashboard',
+      );
+      router.replace(next);
     } catch (error) {
       if (isUnauthorized(error)) {
         setErrorMessage('Invalid email or password');
