@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   Inject,
   Injectable,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { EmailService } from '../email/email.service.js';
 import { renderResetEmailAlert } from '../email/templates/admin-alert.template.js';
 import { renderResetEmail } from '../email/templates/reset.template.js';
@@ -13,7 +16,13 @@ import {
   USERS_REPOSITORY,
   type UsersRepository,
 } from '../users/users.repository.js';
-import { RESET_LINK_INVALID_MESSAGE } from './auth.types.js';
+import {
+  INVALID_CREDENTIALS_MESSAGE,
+  RESET_LINK_INVALID_MESSAGE,
+  type AccessTokenPayload,
+  type AuthenticatedUser,
+  type ChangePasswordResponse,
+} from './auth.types.js';
 import { PasswordHasher } from './password-hasher.js';
 import { passwordPolicyViolation } from './password-policy.js';
 import {
@@ -48,6 +57,7 @@ export class PasswordRecoveryService {
   private readonly frontendUrl: string;
   private readonly adminAlertEmails: string[];
   private readonly mailFrom: string;
+  private readonly ttlSeconds: number;
 
   constructor(
     @Inject(USERS_REPOSITORY) private readonly users: UsersRepository,
@@ -56,9 +66,11 @@ export class PasswordRecoveryService {
     private readonly hasher: PasswordHasher,
     @Inject(PASSWORD_RECOVERY_REPOSITORY)
     private readonly recovery: PasswordRecoveryRepository,
+    private readonly jwt: JwtService,
     config: ConfigService,
   ) {
     this.frontendUrl = config.getOrThrow<string>('FRONTEND_URL');
+    this.ttlSeconds = config.getOrThrow<number>('JWT_TTL_SECONDS');
     this.adminAlertEmails = config.getOrThrow<string[]>('ADMIN_ALERT_EMAILS');
     this.mailFrom = config.getOrThrow<string>('MAIL_FROM');
   }
@@ -139,6 +151,77 @@ export class PasswordRecoveryService {
       // account changed after the read); exactly one concurrent reset wins.
       throw new BadRequestException(RESET_LINK_INVALID_MESSAGE);
     }
+  }
+
+
+  /**
+   * US19 §7.7 authenticated password change.
+   *
+   * The current password is checked with the same generic 401 as login and the
+   * policy is applied before any write. The transaction then rotates the
+   * credential, bumps `tokenVersion`, revokes every session, creates exactly
+   * one replacement session and invalidates unused reset/invite links. The new
+   * JWT is returned separately so the controller can put it in the httpOnly
+   * cookie; it never enters the response body.
+   */
+  async changePassword(
+    user: AuthenticatedUser,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ token: string; response: ChangePasswordResponse }> {
+    const account = await this.users.findByEmail(user.email);
+    if (!account || !account.isActive || account.id !== user.id) {
+      throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+    }
+
+    const currentMatches = await this.hasher.verify(
+      account.passwordHash,
+      currentPassword,
+    );
+    if (!currentMatches) {
+      throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+    }
+
+    // Defence in depth for direct service callers; the DTO rejects first.
+    const violation = passwordPolicyViolation(newPassword);
+    if (violation) {
+      throw new BadRequestException(violation.message);
+    }
+
+    // CPU-heavy argon2 deliberately outside the DB transaction.
+    const passwordHash = await this.hasher.hash(newPassword);
+    const rotated = await this.recovery.changePassword({
+      userId: account.id,
+      passwordHash,
+      session: {
+        id: randomUUID(),
+        expiresAt: new Date(Date.now() + this.ttlSeconds * 1000),
+      },
+    });
+
+    const payload: AccessTokenPayload = {
+      sub: account.id,
+      sid: rotated.session.id,
+      tv: rotated.tokenVersion,
+      role: account.role,
+      email: account.email,
+    };
+    const token = await this.jwt.signAsync(payload, {
+      expiresIn: this.ttlSeconds,
+    });
+
+    return {
+      token,
+      response: {
+        user: {
+          id: account.id,
+          email: account.email,
+          fullName: account.fullName,
+          role: account.role,
+        },
+        expiresIn: this.ttlSeconds,
+      },
+    };
   }
 
   private async sendResetEmail(user: User, rawToken: string): Promise<void> {

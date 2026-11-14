@@ -35,6 +35,15 @@ export interface LoginResult {
   response: LoginResponse;
 }
 
+/**
+ * US19 §7.7 change-password response. The rotated JWT travels only in the
+ * httpOnly `Set-Cookie` header, never in this body.
+ */
+export interface ChangePasswordResponse {
+  user: AuthenticatedUser;
+  expiresIn: number;
+}
+
 export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
   sessionId?: string;

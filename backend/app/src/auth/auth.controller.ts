@@ -11,11 +11,16 @@ import {
 import type { Response } from 'express';
 import { AuthCookies } from './auth.cookies.js';
 import { AuthService } from './auth.service.js';
-import type { AuthenticatedUser, LoginResponse } from './auth.types.js';
+import type {
+  AuthenticatedUser,
+  ChangePasswordResponse,
+  LoginResponse,
+} from './auth.types.js';
 import {
   CurrentSessionId,
   CurrentUser,
 } from './decorators/current-user.decorator.js';
+import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
@@ -72,6 +77,28 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
     await this.passwordRecovery.resetPassword(dto.token, dto.newPassword);
+  }
+
+  /**
+   * US19 §7.7: rotates the session after a password change. The replacement
+   * JWT is written to the httpOnly cookie and only there; the old cookie is
+   * dead immediately because every session was revoked and tokenVersion moved.
+   */
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<ChangePasswordResponse> {
+    const result = await this.passwordRecovery.changePassword(
+      user,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    this.cookies.setAccessToken(response, result.token);
+    return result.response;
   }
 
   @Get('me')

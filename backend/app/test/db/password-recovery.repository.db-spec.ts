@@ -308,10 +308,13 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
     it('updates the credential, bumps tokenVersion, revokes old sessions and creates the new one', async () => {
       const user = await seedUser();
       const oldSessionId = await seedSession(user.id);
+      const secondDeviceSessionId = await seedSession(user.id);
       await seedToken(user.id, { tokenHash: RESET_HASH });
+      await seedToken(user.id, { tokenHash: INVITE_HASH, purpose: 'INVITE' });
       const before = await prisma.user.findUniqueOrThrow({
         where: { id: user.id },
       });
+      const beforeCredential = await credentialOf(user.id);
       const newSessionId = randomUUID();
       const expiresAt = futureDate(3_600_000);
 
@@ -333,10 +336,16 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
       expect(credential.passwordHash).toBe(NEW_HASH);
       expect(credential.passwordUpdatedAt).toBeInstanceOf(Date);
 
-      const oldSession = await prisma.session.findUniqueOrThrow({
-        where: { id: oldSessionId },
-      });
-      expect(oldSession.revokedAt).toBeInstanceOf(Date);
+      expect(credential.passwordUpdatedAt!.getTime()).toBeGreaterThan(
+        beforeCredential.passwordUpdatedAt!.getTime(),
+      );
+
+      for (const sessionId of [oldSessionId, secondDeviceSessionId]) {
+        const oldSession = await prisma.session.findUniqueOrThrow({
+          where: { id: sessionId },
+        });
+        expect(oldSession.revokedAt).toBeInstanceOf(Date);
+      }
       const liveSessions = await prisma.session.findMany({
         where: { userId: user.id, revokedAt: null },
       });
@@ -344,10 +353,40 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
         newSessionId,
       ]);
 
+      await expect(
+        prisma.passwordResetToken.count({
+          where: { userId: user.id, usedAt: null },
+        }),
+      ).resolves.toBe(0);
       const resetToken = await prisma.passwordResetToken.findUniqueOrThrow({
         where: { tokenHash: RESET_HASH },
       });
       expect(resetToken.usedAt).toBeInstanceOf(Date);
+      const inviteToken = await prisma.passwordResetToken.findUniqueOrThrow({
+        where: { tokenHash: INVITE_HASH },
+      });
+      expect(inviteToken.usedAt).toBeInstanceOf(Date);
+    });
+
+    it('creates the credential for an invited account that never had one', async () => {
+      const invited = await prisma.user.create({
+        data: {
+          email: `recovery-invited-${randomUUID()}@rafconsult.test`,
+          fullName: 'Invited User',
+          role: 'WORKER',
+        },
+      });
+
+      const result = await repository.changePassword({
+        userId: invited.id,
+        passwordHash: NEW_HASH,
+        session: { id: randomUUID(), expiresAt: futureDate(3_600_000) },
+      });
+
+      expect(result.tokenVersion).toBe(1);
+      const credential = await credentialOf(invited.id);
+      expect(credential.passwordHash).toBe(NEW_HASH);
+      expect(credential.passwordUpdatedAt).toBeInstanceOf(Date);
     });
 
     it('rolls back and creates no session when the user does not exist', async () => {

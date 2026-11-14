@@ -7,7 +7,10 @@ import type { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/app.setup.js';
 import {
+  ACCESS_TOKEN_COOKIE,
+  INVALID_CREDENTIALS_MESSAGE,
   MISSING_CSRF_MESSAGE,
+  MISSING_TOKEN_MESSAGE,
   RESET_LINK_INVALID_MESSAGE,
 } from '../src/auth/auth.types.js';
 import {
@@ -15,6 +18,7 @@ import {
   PASSWORD_TOO_LONG_MESSAGE,
   PASSWORD_TOO_SHORT_MESSAGE,
 } from '../src/auth/password-policy.js';
+import { PasswordHasher } from '../src/auth/password-hasher.js';
 import { ResetTokenService } from '../src/auth/reset-token.service.js';
 import { CSRF_HEADER } from '../src/auth/guards/csrf.guard.js';
 import {
@@ -31,6 +35,8 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 const EMAIL_PREFIX = 'us19-forgot-e2e-';
 const FORGOT_PATH = '/auth/forgot-password';
 const RESET_PATH = '/auth/reset-password';
+const CHANGE_PASSWORD_PATH = '/auth/change-password';
+const CURRENT_PASSWORD = 'current valid passphrase';
 const NEW_PASSWORD = 'a brand new passphrase';
 const OTHER_NEW_PASSWORD = 'another valid passphrase';
 const CSRF = { [CSRF_HEADER]: '1' };
@@ -103,6 +109,8 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
   let adminAlertEmails: string[];
   let resetTtlSeconds: number;
   let tokens: ResetTokenService;
+  let hasher: PasswordHasher;
+  let jwtTtlSeconds: number;
 
   beforeAll(async () => {
     sender = new ScriptedEmailSender();
@@ -121,6 +129,8 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
     adminAlertEmails = config.getOrThrow<string[]>('ADMIN_ALERT_EMAILS');
     resetTtlSeconds = config.getOrThrow<number>('RESET_TTL_SECONDS');
     tokens = moduleFixture.get(ResetTokenService);
+    hasher = new PasswordHasher();
+    jwtTtlSeconds = config.getOrThrow<number>('JWT_TTL_SECONDS');
   });
 
   beforeEach(async () => {
@@ -152,6 +162,7 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       fullName?: string;
       isActive?: boolean;
       withCredential?: boolean;
+      passwordHash?: string;
     } = {},
   ): Promise<SeededUser> {
     const email = `${EMAIL_PREFIX}${randomUUID()}@rafconsult.test`;
@@ -167,7 +178,8 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
           : {
               credential: {
                 create: {
-                  passwordHash: 'placeholder-argon2id-hash',
+                  passwordHash:
+                    options.passwordHash ?? 'placeholder-argon2id-hash',
                   passwordUpdatedAt: new Date(),
                 },
               },
@@ -197,6 +209,40 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
       .post('/auth/login')
       .set(CSRF)
       .send({ email, password });
+  }
+
+  function accessTokenCookie(
+    response: request.Response,
+  ): string | undefined {
+    const header = response.headers['set-cookie'];
+    const cookies = Array.isArray(header) ? header : header ? [header] : [];
+    return cookies.find((cookie) =>
+      cookie.startsWith(`${ACCESS_TOKEN_COOKIE}=`),
+    );
+  }
+
+  function cookieHeader(response: request.Response): string {
+    const cookie = accessTokenCookie(response);
+    if (!cookie) {
+      throw new Error(`response did not set the ${ACCESS_TOKEN_COOKIE} cookie`);
+    }
+    return cookie.split(';')[0];
+  }
+
+  function getMe(cookie: string) {
+    return request(app.getHttpServer()).get('/auth/me').set('Cookie', cookie);
+  }
+
+  function postChangePassword(
+    cookie: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    return request(app.getHttpServer())
+      .post(CHANGE_PASSWORD_PATH)
+      .set(CSRF)
+      .set('Cookie', cookie)
+      .send({ currentPassword, newPassword });
   }
 
   function postForgot(email: string) {
@@ -701,6 +747,215 @@ describe('US19 password reset (e2e, real PostgreSQL)', () => {
         where: { userId: user.id },
       });
       expect(credential.passwordHash).toBe('placeholder-argon2id-hash');
+    });
+  });
+
+  describe('POST /auth/change-password', () => {
+    async function seedLoginUser(password = CURRENT_PASSWORD) {
+      const passwordHash = await hasher.hash(password);
+      const user = await seedUser({ passwordHash });
+      return { user, passwordHash };
+    }
+
+    it('rotates the session and returns {user, expiresIn} with no JWT in the body', async () => {
+      const { user, passwordHash } = await seedLoginUser();
+      const firstLogin = await postLogin(user.email, CURRENT_PASSWORD).expect(
+        200,
+      );
+      const firstCookie = cookieHeader(firstLogin);
+      const secondCookie = cookieHeader(
+        await postLogin(user.email, CURRENT_PASSWORD).expect(200),
+      );
+      const { rawToken: resetRaw } = await tokens.issueReset(user.id);
+      const { rawToken: inviteRaw } = await tokens.issueInvite(user.id);
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      const errorSpy = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      const response = await postChangePassword(
+        firstCookie,
+        CURRENT_PASSWORD,
+        NEW_PASSWORD,
+      ).expect(200);
+
+      expect(response.body).toEqual({
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: 'PROJECT_MANAGER',
+        },
+        expiresIn: jwtTtlSeconds,
+      });
+      expect(response.body).not.toHaveProperty('accessToken');
+      expect(response.body).not.toHaveProperty('token');
+      expect(JSON.stringify(response.body)).not.toContain(NEW_PASSWORD);
+      expect(JSON.stringify(response.body)).not.toMatch(/\$argon2/);
+      const rotatedCookie = accessTokenCookie(response) ?? '';
+      expect(rotatedCookie).toContain('HttpOnly');
+      expect(rotatedCookie).toContain('Path=/');
+      const newCookie = cookieHeader(response);
+      expect(newCookie).not.toBe(firstCookie);
+
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toMatch(/^\$argon2id\$/);
+      expect(credential.passwordHash).not.toBe(passwordHash);
+      expect(credential.passwordUpdatedAt).toBeInstanceOf(Date);
+
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.tokenVersion).toBe(before.tokenVersion + 1);
+
+      // Exactly one live session remains: the newly rotated one.
+      const sessions = await prisma.session.findMany({
+        where: { userId: user.id },
+      });
+      expect(sessions.filter((session) => session.revokedAt === null)).toHaveLength(1);
+      const liveSession = sessions.find(
+        (session) => session.revokedAt === null,
+      );
+      expect(liveSession?.id).toBeDefined();
+
+      // Unused reset/invite links die with the change.
+      const tokenRows = await prisma.passwordResetToken.findMany({
+        where: { userId: user.id },
+      });
+      expect(tokenRows.map((row) => row.tokenHash).sort()).toEqual(
+        [sha256Hex(resetRaw), sha256Hex(inviteRaw)].sort(),
+      );
+      expect(tokenRows.every((row) => row.usedAt instanceof Date)).toBe(true);
+
+      // Old device cookies are dead; the rotated cookie satisfies /auth/me.
+      await getMe(firstCookie).expect(401);
+      await getMe(secondCookie).expect(401);
+      await getMe(newCookie).expect(200);
+
+      // Old password rejected, new password accepted.
+      await postLogin(user.email, CURRENT_PASSWORD).expect(401);
+      await postLogin(user.email, NEW_PASSWORD).expect(200);
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong current password with the generic 401 and changes nothing', async () => {
+      const { user, passwordHash } = await seedLoginUser();
+      const cookie = cookieHeader(
+        await postLogin(user.email, CURRENT_PASSWORD).expect(200),
+      );
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      const errorSpy = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      const response = await postChangePassword(
+        cookie,
+        'wrong current password',
+        NEW_PASSWORD,
+      ).expect(401);
+
+      expect(response.body.message).toBe(INVALID_CREDENTIALS_MESSAGE);
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toContain(
+        'wrong current password',
+      );
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toBe(passwordHash);
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      expect(after.tokenVersion).toBe(before.tokenVersion);
+      const sessions = await prisma.session.findMany({
+        where: { userId: user.id },
+      });
+      expect(sessions.every((session) => session.revokedAt === null)).toBe(
+        true,
+      );
+      await getMe(cookie).expect(200);
+      await postLogin(user.email, CURRENT_PASSWORD).expect(200);
+    });
+
+    it('returns the policy message and leaves the session untouched', async () => {
+      const { user, passwordHash } = await seedLoginUser();
+      const cookie = cookieHeader(
+        await postLogin(user.email, CURRENT_PASSWORD).expect(200),
+      );
+      const cases = [
+        { password: 'a'.repeat(11), message: PASSWORD_TOO_SHORT_MESSAGE },
+        { password: 'a'.repeat(129), message: PASSWORD_TOO_LONG_MESSAGE },
+        { password: 'unbelievable', message: PASSWORD_TOO_COMMON_MESSAGE },
+      ];
+
+      for (const changeCase of cases) {
+        const response = await postChangePassword(
+          cookie,
+          CURRENT_PASSWORD,
+          changeCase.password,
+        ).expect(400);
+        expect(response.body.message).toEqual([changeCase.message]);
+        expect(response.headers['set-cookie']).toBeUndefined();
+      }
+
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toBe(passwordHash);
+      await getMe(cookie).expect(200);
+      await postLogin(user.email, CURRENT_PASSWORD).expect(200);
+
+      // The same session can still complete a valid change afterwards.
+      await postChangePassword(cookie, CURRENT_PASSWORD, NEW_PASSWORD).expect(
+        200,
+      );
+    });
+
+    it('requires the access cookie and CSRF header before doing any work', async () => {
+      const { user, passwordHash } = await seedLoginUser();
+      const cookie = cookieHeader(
+        await postLogin(user.email, CURRENT_PASSWORD).expect(200),
+      );
+      const payload = {
+        currentPassword: CURRENT_PASSWORD,
+        newPassword: NEW_PASSWORD,
+      };
+
+      const noCookie = await request(app.getHttpServer())
+        .post(CHANGE_PASSWORD_PATH)
+        .set(CSRF)
+        .send(payload)
+        .expect(401);
+      expect(noCookie.body.message).toBe(MISSING_TOKEN_MESSAGE);
+
+      const noCsrf = await request(app.getHttpServer())
+        .post(CHANGE_PASSWORD_PATH)
+        .set('Cookie', cookie)
+        .send(payload)
+        .expect(403);
+      expect(noCsrf.body.message).toBe(MISSING_CSRF_MESSAGE);
+
+      await request(app.getHttpServer())
+        .post(CHANGE_PASSWORD_PATH)
+        .set(CSRF)
+        .set('Cookie', `${ACCESS_TOKEN_COOKIE}=not-a-jwt`)
+        .send(payload)
+        .expect(401);
+
+      const credential = await prisma.credential.findUniqueOrThrow({
+        where: { userId: user.id },
+      });
+      expect(credential.passwordHash).toBe(passwordHash);
+      await getMe(cookie).expect(200);
     });
   });
 });
