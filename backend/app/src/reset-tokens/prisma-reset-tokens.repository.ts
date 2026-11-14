@@ -55,4 +55,17 @@ export class PrismaResetTokensRepository implements ResetTokensRepository {
       select: RESET_TOKEN_SELECT,
     });
   }
+
+  async pruneExpiredAndUsed(): Promise<number> {
+    const now = new Date();
+    // One statement, no transaction: the pruning is independent housekeeping.
+    // Expired (`expiresAt <= now`) and used (`usedAt` set) rows are dead; a row
+    // issued just now is unmatched because its expiry is in the future.
+    const deleted = await this.prisma.passwordResetToken.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lte: now } }, { usedAt: { not: null } }],
+      },
+    });
+    return deleted.count;
+  }
 }

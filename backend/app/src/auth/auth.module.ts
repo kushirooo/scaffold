@@ -12,6 +12,7 @@ import { USERS_REPOSITORY } from '../users/users.repository.js';
 import { AuthController } from './auth.controller.js';
 import { AuthCookies } from './auth.cookies.js';
 import { AuthService } from './auth.service.js';
+import { ForgotPasswordRateLimiter } from './forgot-password-rate-limiter.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { PasswordHasher } from './password-hasher.js';
 import { PrismaPasswordRecoveryRepository } from './prisma-password-recovery.repository.js';
@@ -62,6 +63,7 @@ const JWT_AUDIENCE = 'raf-consult-portal';
       useClass: PrismaPasswordRecoveryRepository,
     },
     ResetTokenService,
+    ForgotPasswordRateLimiter,
     PasswordRecoveryService,
   ],
   // ProjectsModule applies JwtAuthGuard on its controllers. Re-exporting the

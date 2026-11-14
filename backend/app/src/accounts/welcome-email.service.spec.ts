@@ -35,6 +35,10 @@ class RecordingResetTokensRepository implements ResetTokensRepository {
       throw new Error('token store unavailable');
     }
   }
+
+  async pruneExpiredAndUsed(): Promise<number> {
+    return 0;
+  }
 }
 
 /** Records every send and fails the next one when asked, in call order. */

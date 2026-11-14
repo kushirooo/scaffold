@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaPasswordRecoveryRepository } from '../../src/auth/prisma-password-recovery.repository.js';
 import type { PrismaService } from '../../src/prisma/prisma.service.js';
+import { PrismaResetTokensRepository } from '../../src/reset-tokens/prisma-reset-tokens.repository.js';
 import { futureDate, pastDate } from './support/fixtures.js';
 import {
   createTestPrismaService,
@@ -464,5 +465,97 @@ describe('PrismaPasswordRecoveryRepository (real PostgreSQL)', () => {
 
       await expect(prisma.session.count()).resolves.toBe(0);
     });
+  });
+});
+
+describe('PrismaResetTokensRepository.pruneExpiredAndUsed (real PostgreSQL)', () => {
+  const EXPIRED_HASH = 'e'.repeat(64);
+  const USED_HASH = 'f'.repeat(64);
+  const VALID_HASH = 'g'.repeat(64);
+
+  let prisma: PrismaService;
+  let repository: PrismaResetTokensRepository;
+
+  beforeAll(() => {
+    prisma = createTestPrismaService();
+    repository = new PrismaResetTokensRepository(prisma);
+  });
+
+  beforeEach(async () => {
+    await resetTestDatabase(prisma);
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  async function seedToken(
+    userId: string,
+    options: {
+      tokenHash: string;
+      purpose?: 'RESET' | 'INVITE';
+      expiresAt?: Date;
+      usedAt?: Date | null;
+    },
+  ): Promise<void> {
+    await prisma.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash: options.tokenHash,
+        purpose: options.purpose ?? 'RESET',
+        expiresAt: options.expiresAt ?? futureDate(15 * 60 * 1000),
+        usedAt: options.usedAt ?? null,
+      },
+    });
+  }
+
+  it('deletes expired and used rows and keeps a valid unused row', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `prune-${randomUUID()}@rafconsult.test`,
+        fullName: 'Prune Fixture',
+        role: 'WORKER',
+      },
+    });
+
+    await seedToken(user.id, {
+      tokenHash: EXPIRED_HASH,
+      expiresAt: pastDate(1_000),
+    });
+    await seedToken(user.id, {
+      tokenHash: USED_HASH,
+      usedAt: pastDate(1_000),
+    });
+    await seedToken(user.id, { tokenHash: VALID_HASH });
+
+    await expect(repository.pruneExpiredAndUsed()).resolves.toBe(2);
+
+    const remaining = await prisma.passwordResetToken.findMany({
+      where: { userId: user.id },
+    });
+    expect(remaining.map((row) => row.tokenHash)).toEqual([VALID_HASH]);
+    expect(remaining[0].usedAt).toBeNull();
+    expect(remaining[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('returns 0 and keeps every live row when there is nothing to prune', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `prune-live-${randomUUID()}@rafconsult.test`,
+        fullName: 'Live Fixture',
+        role: 'WORKER',
+      },
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+      await seedToken(user.id, {
+        tokenHash: `${index}${'h'.repeat(63)}`,
+      });
+    }
+
+    await expect(repository.pruneExpiredAndUsed()).resolves.toBe(0);
+    await expect(
+      prisma.passwordResetToken.count({ where: { userId: user.id } }),
+    ).resolves.toBe(3);
   });
 });

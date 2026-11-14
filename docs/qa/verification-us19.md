@@ -58,3 +58,22 @@ None blocking. Independent review PASS with 2 P3s, both resolved — alert error
 - [x] No password, JWT, cookie value, raw reset token or hash appears in this evidence.
 - [x] No failed check omitted (none failed).
 - [x] Statuses use strategy §8 vocabulary; `docs/qa/ac-matrix.md` is updated by the Lead; `[OPEN-1]` is stated as a deviation, not literal AC3.
+
+## STAB-US19 residual hardening (15 Nov 2026)
+
+Branch `stabilize/stab-us19` (from `main` @ `3cde2d2`). Residual security gaps closed without a
+new dependency or schema/migration change.
+
+| Change | Evidence |
+|---|---|
+| Per-address forgot-password throttle: **5 requests / 15 min** (in-memory sliding window on the trimmed, lower-cased email). Over-limit: `204`, no email, no lookup, structured `forgot_password_rate_limited` log with no email/token. Bounded to 10 000 tracked addresses | `src/auth/forgot-password-rate-limiter.spec.ts` (window expiry, per-address isolation, over-limit without extending the window, synchronous burst cap, sweep reclamation, map bound); e2e `test/auth-reset.e2e-spec.ts` → `rate-limits repeated forgot requests per address…` |
+| Response-time floor: **500 ms** minimum applied in `finally` to known, unknown and failure branches (fake-timer unit test at the service boundary). Provider SMTP latency can exceed the floor on a real send — stated, not hidden | `src/auth/forgot-password-rate-limiter.spec.ts` (floor + service-branch cases) |
+| Reset-token cleanup: `pruneExpiredAndUsed()` deletes expired **and** used `password_reset_tokens` rows for **both purposes**, called after every successful issuance and failing open (logged `reset_token_prune_failed`, issuance still succeeds); the just-issued row is never matched | `src/auth/reset-token.service.spec.ts`; `test/db/password-recovery.repository.db-spec.ts` (`pruneExpiredAndUsed`); e2e re-issue prune case |
+| Decisions: exact-match blocklist stays (substring matching would reject valid passphrases); limit 5 exceeds the other tests' max 2 forgot calls per address (the new rate-limit test makes 7); staging/Mailtrap evidence remains **DEFERRED** (no staging; k344 owns it); `[OPEN-1]` remains the agreed deviation pending SM amendment — literal US19 AC3 not claimed | this doc; ADR 0003 |
+| US02 resend e2e updated (Lead-approved cross-story edit): after a welcome resend the invalidated (used) INVITE row is pruned and exactly one live unused row remains; replaying the old raw link still returns the generic `400` | `test/user-management.e2e-spec.ts` → `resends the welcome email and replaces the previous unused INVITE token` |
+
+Commands (15 Nov 2026, from `backend/app`, all exit 0): `npm test` **165/165** (23 files) ·
+`npm run test:db` **45/45** (6 files, `raf_pms_test`) · `npm run test:e2e` **74/74** (8 files,
+`raf_pms_e2e`) · `npm run lint` 0 warnings/0 errors · `npm run build`.
+
+Status: **PASS (local)** for the hardening above; CI and staging are not claimed.

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   CreateResetTokenInput,
@@ -11,6 +12,8 @@ class RecordingResetTokensRepository implements ResetTokensRepository {
   readonly calls: CreateResetTokenInput[] = [];
   readonly lookups: string[] = [];
   readonly records = new Map<string, ResetTokenRecord>();
+  readonly pruneCalls: number[] = [];
+  pruneFailure: Error | null = null;
 
   async replaceUnused(input: CreateResetTokenInput): Promise<void> {
     this.calls.push({ ...input });
@@ -19,6 +22,12 @@ class RecordingResetTokensRepository implements ResetTokensRepository {
   async findByTokenHash(tokenHash: string): Promise<ResetTokenRecord | null> {
     this.lookups.push(tokenHash);
     return this.records.get(tokenHash) ?? null;
+  }
+
+  async pruneExpiredAndUsed(): Promise<number> {
+    this.pruneCalls.push(Date.now());
+    if (this.pruneFailure) throw this.pruneFailure;
+    return 0;
   }
 }
 
@@ -217,5 +226,43 @@ describe('ResetTokenService', () => {
 
     expect(first.rawToken).not.toBe(second.rawToken);
     expect(repository.calls).toHaveLength(2);
+  });
+
+  describe('prune on successful issuance', () => {
+    it('prunes expired/used rows once per issued token, after the insert', async () => {
+      const { service, repository } = serviceWith({ RESET_TTL_SECONDS: 900 });
+
+      await service.issueReset('user-1');
+      await service.issueInvite('user-1');
+
+      expect(repository.calls).toHaveLength(2);
+      expect(repository.pruneCalls).toHaveLength(2);
+    });
+
+    it('fails open: a prune error is logged and the issued token is still returned', async () => {
+      const { service, repository } = serviceWith({ RESET_TTL_SECONDS: 900 });
+      repository.pruneFailure = new Error('scripted prune failure');
+      const warnSpy = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const before = Date.now();
+
+      const { rawToken, expiresAt } = await service.issueReset('user-1');
+
+      expect(rawToken).toHaveLength(43);
+      expectTtl(expiresAt, before, Date.now(), 900);
+      expect(repository.calls).toHaveLength(1);
+      const events = warnSpy.mock.calls
+        .map((call) => call[0])
+        .filter(
+          (argument): argument is Record<string, unknown> =>
+            typeof argument === 'object' &&
+            argument !== null &&
+            'event' in argument,
+        );
+      expect(events).toEqual([
+        { event: 'reset_token_prune_failed', errorName: 'Error' },
+      ]);
+    });
   });
 });
