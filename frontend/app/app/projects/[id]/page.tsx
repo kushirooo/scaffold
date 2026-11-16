@@ -48,10 +48,7 @@ export default function ProjectDetailsPage({
 
   useEffect(() => {
     if (!projectId) return;
-    if (!isProjectManager) {
-      setLoading(false);
-      return;
-    }
+    if (!isProjectManager) return;
     let cancelled = false;
 
     const load = async () => {
