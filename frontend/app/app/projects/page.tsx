@@ -247,7 +247,7 @@ export default function ProjectsPage() {
     return (
       <div
         key={project.id}
-        className="group relative bg-white p-6 rounded-2xl shad1-sm hover:shadow-xl transition-shadow flex flex-col justify-between"
+        className="group relative bg-white p-6 rounded-2xl shad1-sm hover:shadow-md transition-shadow flex flex-col justify-between hover:-translate-y-1"
       >
         <div>
           <div className="flex justify-between items-start mb-3">
@@ -373,14 +373,15 @@ export default function ProjectsPage() {
                   setRefreshKey((key) => key + 1);
                 }}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg  bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 hover:-translate-y-1"
+
               >
                 {loading ? 'Refreshing…' : 'Refresh'}
               </button>
 
               <Link
                 href="/projects/new"
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-navy px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-navy-raised"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-navy px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-navy-raised hover:-translate-y-1"
               >
                 + New Project
               </Link>
@@ -409,10 +410,10 @@ export default function ProjectsPage() {
         </div>
 
         <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total Project" value={projects.length} detail="All Registered Project" />
-          <StatCard label="Active projects" value={activeProj} detail="Currently active" tone="purple" />
-          <StatCard label="On hold projects" value={inactiveProj} detail="Archived projects" tone="amber" />
-          <StatCard label="Completed projects" value={completedProj} detail="Finished projects" tone="green" />
+          <StatCard label="Total Project" value={projects.length} />
+          <StatCard label="Active projects" value={activeProj} tone="purple" />
+          <StatCard label="On hold projects" value={inactiveProj} tone="amber" />
+          <StatCard label="Completed projects" value={completedProj} tone="green" />
         </section>
 
         {errorMessage ? (
@@ -484,13 +485,13 @@ export default function ProjectsPage() {
                   <option value="name-asc">Name A–Z</option>
                 </select>
 
-                <div className="flex items-center rounded-lg border border-slate-200 p-0.5">
+                <div className="flex w-fit items-center rounded-lg border border-slate-200 p-0.5">
                   <button
                     type="button"
                     onClick={() => setViewMode('table')}
                     aria-label="List view"
                     aria-pressed={viewMode === 'table'}
-                    className={`rounded-md p-1.5 ${viewMode === 'table' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
+                    className={`rounded-xl p-1.5 ${viewMode === 'table' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
                   >
                     <Icon name="list" />
                   </button>
@@ -499,7 +500,7 @@ export default function ProjectsPage() {
                     onClick={() => setViewMode('cards')}
                     aria-label="Tile view"
                     aria-pressed={viewMode === 'cards'}
-                    className={`rounded-md p-1.5 ${viewMode === 'cards' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
+                    className={`rounded-xl p-1.5 ${viewMode === 'cards' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
                   >
                     <Icon name="grid" />
                   </button>
@@ -597,12 +598,10 @@ export default function ProjectsPage() {
 function StatCard({
   label,
   value,
-  detail,
   tone = 'blue',
 }: {
   label: string;
   value: number;
-  detail: string;
   tone?: 'blue' | 'green' | 'amber' | 'purple';
 }) {
   const tones = {
@@ -622,7 +621,6 @@ function StatCard({
           <Icon name="clipboard" className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-slate-400">{detail}</p>
     </article>
   );
 }

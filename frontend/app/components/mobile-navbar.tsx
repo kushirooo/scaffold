@@ -122,7 +122,7 @@ export default function MobileNavbar({ user }: MobileNavbarProps) {
             aria-label="Open menu"
             aria-expanded={open}
             aria-controls="mobile-menu"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition-all duration-200 hover:border-[#08086F]/40 hover:bg-[#E4E9FF] hover:text-[#08086F] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08086F]/40"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg  bg-white text-slate-700 transition-all duration-200 hover:border-brand-navy/40 hover:bg-[#E4E9FF] hover:text-brand-navy active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08086F]/40"
           >
             <svg
               viewBox="0 0 24 24"
@@ -156,18 +156,18 @@ export default function MobileNavbar({ user }: MobileNavbarProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Main menu"
-        className={`fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col bg-[#08086F] text-white shadow-2xl transition-[transform,visibility] duration-300 motion-reduce:transition-none md:hidden ${
+        className={`fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col bg-brand-navy text-white shadow-2xl transition-[transform,visibility] duration-300 motion-reduce:transition-none md:hidden ${
           open ? 'visible translate-x-0' : 'invisible translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between px-5 pt-5">
-          <p className="text-sm font-semibold text-white/80">Menu</p>
+        <div className="flex items-center justify-between px-6 pt-5">
+          <p className="text-md font-semibold text-white/80">Menu</p>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={closeMenu}
             aria-label="Close menu"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/20 text-white transition-all duration-200 hover:border-[#F5F7FF] hover:bg-[#F5F7FF] hover:text-[#08086F] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl active:bg-white/30 text-white transition-all duration-200  active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 colors"
           >
             <svg
               viewBox="0 0 24 24"
@@ -216,7 +216,7 @@ export default function MobileNavbar({ user }: MobileNavbarProps) {
               aria-current={link.active ? 'page' : undefined}
               className={`block rounded-xl border px-4 py-3 text-sm font-medium transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
                 link.active
-                  ? 'border-white bg-white text-[#08086F] hover:bg-[#E4E9FF]'
+                  ? 'border-white bg-white text-brand-navy hover:bg-[#E4E9FF]'
                   : 'border-white/15 bg-white/5 text-white hover:border-white/50 hover:bg-white/15 motion-safe:hover:translate-x-1'
               }`}
             >
@@ -230,7 +230,7 @@ export default function MobileNavbar({ user }: MobileNavbarProps) {
             type="button"
             onClick={handleLogout}
             disabled={loggingOut}
-            className="w-full rounded-xl border border-white/30 px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:border-[#F5F7FF] hover:bg-[#F5F7FF] hover:text-[#08086F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-white/30 disabled:hover:bg-transparent disabled:hover:text-white"
+            className="w-full rounded-md border border-white/30 px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 active:border-canvas active:bg-canvas active:text-brand-navy active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-60 disabled:active:border-white/30 disabled:active:bg-transparent disabled:active:text-white"
           >
             {loggingOut ? 'Logging out…' : 'Log out'}
           </button>
