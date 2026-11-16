@@ -10,6 +10,7 @@ import {
   removeProjectMember,
 } from '@/services/projectService';
 import { formatCurrency } from '@/lib/projects';
+import { useSession } from '@/components/session-provider';
 
 export default function ProjectDetailsPage({
   params,
@@ -28,6 +29,17 @@ export default function ProjectDetailsPage({
   const [isAssigning, setIsAssigning] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
+  const { user } = useSession();
+  const userId = user?.id;
+  // Project manager + owner  -> view and edit
+  // Project manager, not owner -> view only
+  // Anyone else               -> no access
+  // (The backend must enforce this too - hiding things in the UI is not security.)
+  const isProjectManager = user?.role === 'PROJECT_MANAGER';
+  const canManageMembers = Boolean(
+    isProjectManager && userId && project && project.ownerId === userId,
+  );
+
   useEffect(() => {
     Promise.resolve(params).then((resolvedParams) => {
       setProjectId(resolvedParams.id);
@@ -36,6 +48,7 @@ export default function ProjectDetailsPage({
 
   useEffect(() => {
     if (!projectId) return;
+    if (!isProjectManager) return;
     let cancelled = false;
 
     const load = async () => {
@@ -44,6 +57,8 @@ export default function ProjectDetailsPage({
         if (cancelled) return;
         setErrorMessage(null);
         setProject(current);
+        // Only the owner can assign people, so only they need the worker list.
+        if (current.ownerId !== userId) return;
         try {
           const users = await fetchAssignableWorkers();
           if (!cancelled) setAvailableUsers(users);
@@ -66,11 +81,11 @@ export default function ProjectDetailsPage({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, userId, isProjectManager]);
 
   const handleAssignMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !project || isAssigning) return;
+    if (!canManageMembers || !selectedUserId || !project || isAssigning) return;
 
     setMemberError(null);
     setNotification(null);
@@ -93,7 +108,7 @@ export default function ProjectDetailsPage({
   };
 
   const handleRemoveMember = async (userId: string) => {
-    if (!project || removingMemberId) return;
+    if (!canManageMembers || !project || removingMemberId) return;
     setMemberError(null);
     setNotification(null);
     setRemovingMemberId(userId);
@@ -114,6 +129,17 @@ export default function ProjectDetailsPage({
   const unassignedUsers = availableUsers.filter(
     (user) => !project?.members.some((member) => member.userId === user.id),
   );
+
+  if (!isProjectManager) {
+    return (
+      <div className="p-8 text-center text-slate-500">
+        <p role="alert">You do not have access to this project.</p>
+        <Link href="/dashboard" className="text-brand-navy underline mt-2 inline-block">
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className="p-8 text-center text-slate-500">Loading project details...</div>;
@@ -151,6 +177,12 @@ export default function ProjectDetailsPage({
         </div>
       )}
 
+      {!canManageMembers && (
+        <div className="mb-6 p-4 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm" role="note">
+          This project is read-only for you. Only the project owner can change its team.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <p className="text-xs font-mono text-slate-400 uppercase">Start Date</p>
@@ -169,45 +201,47 @@ export default function ProjectDetailsPage({
       <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-xl font-semibold text-slate-900 mb-4">Project Team Members</h2>
 
-        <form onSubmit={handleAssignMember} className="flex flex-wrap gap-4 items-end mb-4 p-4 bg-slate-50 rounded-xl">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Select User</label>
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
-              required
-            >
-              <option value="">-- Choose User --</option>
-              {unassignedUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.systemRole})
-                </option>
-              ))}
-            </select>
-          </div>
+        {canManageMembers && (
+          <form onSubmit={handleAssignMember} className="flex flex-wrap gap-4 items-end mb-4 p-4 bg-slate-50 rounded-xl">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Select User</label>
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
+                required
+              >
+                <option value="">-- Choose User --</option>
+                {unassignedUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.systemRole})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div className="w-48">
-            <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Assign Role</label>
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value as ProjectRole)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
-            >
-              <option value="Owner">Owner</option>
-              <option value="Member">Member</option>
-              <option value="Contributor">Contributor</option>
-            </select>
-          </div>
+            <div className="w-48">
+              <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Assign Role</label>
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as ProjectRole)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
+              >
+                <option value="Owner">Owner</option>
+                <option value="Member">Member</option>
+                <option value="Contributor">Contributor</option>
+              </select>
+            </div>
 
-          <button
-            type="submit"
-            disabled={isAssigning || !selectedUserId}
-            className="px-5 py-2 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
-          >
-            {isAssigning ? 'Assigning…' : 'Assign to Project'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isAssigning || !selectedUserId}
+              className="px-5 py-2 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
+            >
+              {isAssigning ? 'Assigning…' : 'Assign to Project'}
+            </button>
+          </form>
+        )}
 
         {memberError && (
           <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
@@ -215,7 +249,7 @@ export default function ProjectDetailsPage({
           </p>
         )}
 
-        {availableUsers.length === 0 && !memberError && (
+        {canManageMembers && availableUsers.length === 0 && !memberError && (
           <p className="mb-4 text-sm text-slate-500">No active workers are available to assign.</p>
         )}
 
@@ -229,7 +263,7 @@ export default function ProjectDetailsPage({
                   <th className="px-3 py-3 font-medium">Worker</th>
                   <th className="px-3 py-3 font-medium">Email</th>
                   <th className="px-3 py-3 font-medium">Project Role</th>
-                  <th className="px-3 py-3 text-right font-medium">Action</th>
+                  {canManageMembers && <th className="px-3 py-3 text-right font-medium">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -244,20 +278,22 @@ export default function ProjectDetailsPage({
                           {member.projectRole}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-right">
-                        {isProjectOwner ? (
-                          <span className="text-xs text-slate-400">Project owner</span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveMember(member.userId)}
-                            disabled={removingMemberId !== null}
-                            className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                          >
-                            {removingMemberId === member.userId ? 'Removing…' : 'Remove'}
-                          </button>
-                        )}
-                      </td>
+                      {canManageMembers && (
+                        <td className="px-3 py-3 text-right">
+                          {isProjectOwner ? (
+                            <span className="text-xs text-slate-400">Project owner</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveMember(member.userId)}
+                              disabled={removingMemberId !== null}
+                              className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              {removingMemberId === member.userId ? 'Removing…' : 'Remove'}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

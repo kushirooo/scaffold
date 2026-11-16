@@ -35,6 +35,7 @@ import {
   type UserInput,
   type UserRecord,
 } from '@/types/users';
+import { EyeIcon } from '../../app/login/page';
 
 type DialogState =
   | { kind: 'create' }
@@ -73,22 +74,22 @@ function Icon({
   className = 'h-4 w-4',
 }: {
   name:
-    | 'users'
-    | 'shield'
-    | 'search'
-    | 'plus'
-    | 'refresh'
-    | 'grid'
-    | 'list'
-    | 'eye'
-    | 'edit'
-    | 'ban'
-    | 'trash'
-    | 'mail'
-    | 'chevron-left'
-    | 'chevron-right'
-    | 'close'
-    | 'clock';
+  | 'users'
+  | 'shield'
+  | 'search'
+  | 'plus'
+  | 'refresh'
+  | 'grid'
+  | 'list'
+  | 'eye'
+  | 'edit'
+  | 'ban'
+  | 'trash'
+  | 'mail'
+  | 'chevron-left'
+  | 'chevron-right'
+  | 'close'
+  | 'clock';
   className?: string;
 }) {
   const common = {
@@ -122,7 +123,7 @@ function Icon({
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function initials(name: string) {
+export function initials(name: string) {
   return (
     name
       .trim()
@@ -186,6 +187,7 @@ export function UserManagementDashboard() {
   const [rowActionId, setRowActionId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [toast, setToast] = useState<UserToastState | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const dismissToast = useCallback(() => setToast(null), []);
   const showToast = useCallback((next: Omit<UserToastState, 'id'>) => {
@@ -528,8 +530,8 @@ export function UserManagementDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F5F7FF] text-slate-800">
-      <main className="mx-auto w-full max-w-[1480px] px-4 py-6 sm:px-7 sm:py-8 lg:px-9">
+    <div className="min-h-screen bg-canvas text-slate-800">
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-7 sm:py-8 lg:px-9">
         <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
           <div>
             <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#54708f]">
@@ -543,30 +545,19 @@ export function UserManagementDashboard() {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            {user ? (
-              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8eef7] text-[11px] font-bold text-[#18365f]">
-                  {initials(user.fullName)}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-slate-800">{user.fullName}</p>
-                  <p className="text-[10px] text-slate-500">{roleLabel(user.role)}</p>
-                </div>
-              </div>
-            ) : null}
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void loadUsers()}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg  bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 hover:-translate-y-1"
               >
-                <Icon name="refresh" /> Refresh
+                Refresh
               </button>
               <button
                 type="button"
                 onClick={openCreate}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#18365f] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#234875]"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-navy px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-navy-raised hover:-translate-y-1"
               >
                 <Icon name="plus" /> Add User
               </button>
@@ -612,10 +603,10 @@ export function UserManagementDashboard() {
             ) : null}
 
             <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="Total registered users" value={users.length} detail="All system accounts" />
-              <StatCard label="Active users" value={activeCount} detail="Currently enabled" tone="green" />
-              <StatCard label="Inactive users" value={inactiveCount} detail="Access disabled" tone="amber" />
-              <StatCard label="System roles" value={SYSTEM_ROLES.length} detail="Defined permission groups" tone="purple" />
+              <StatCard label="Total registered users" value={users.length} />
+              <StatCard label="Active users" value={activeCount} tone="green" />
+              <StatCard label="Inactive users" value={inactiveCount}  tone="amber" />
+              <StatCard label="System roles" value={SYSTEM_ROLES.length} tone="purple" />
             </section>
 
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-900/[0.025]">
@@ -691,7 +682,7 @@ export function UserManagementDashboard() {
                       onClick={() => setViewMode('table')}
                       aria-label="Table view"
                       aria-pressed={viewMode === 'table'}
-                      className={`rounded-md p-1.5 ${viewMode === 'table' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
+                      className={`rounded-xl p-1.5 ${viewMode === 'table' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
                     >
                       <Icon name="list" />
                     </button>
@@ -700,7 +691,7 @@ export function UserManagementDashboard() {
                       onClick={() => setViewMode('cards')}
                       aria-label="Card view"
                       aria-pressed={viewMode === 'cards'}
-                      className={`rounded-md p-1.5 ${viewMode === 'cards' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
+                      className={`rounded-xl p-1.5 ${viewMode === 'cards' ? 'bg-[#eaf0f8] text-[#18365f]' : 'text-slate-400 hover:text-slate-700'}`}
                     >
                       <Icon name="grid" />
                     </button>
@@ -876,12 +867,9 @@ export function UserManagementDashboard() {
               </table>
             </div>
             <div className="m-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs font-bold text-amber-950">Important · Frontend display only</p>
+              <p className="text-xs font-bold text-amber-950">Important</p>
               <p className="mt-1 text-xs leading-5 text-amber-900">
-                This matrix controls how the frontend presents available actions. It is not a
-                security boundary. NestJS enforces every permission on the API using
-                authenticated identity checks and backend guards — never rely on hidden
-                buttons or client-side role checks to protect data.
+                This matrix is only a visual guide only. No changes can be made here.
               </p>
             </div>
           </section>
@@ -930,25 +918,31 @@ export function UserManagementDashboard() {
                 {formErrors.email ? <span className="mt-1 block text-[11px] text-rose-600">{formErrors.email}</span> : null}
               </label>
               {dialog.kind === 'create' ? (
-                <label className="sm:col-span-2">
+                <div className="sm:col-span-2">
                   <FieldLabel required>Password</FieldLabel>
-                  <input
-                    type="password"
-                    value={form.password ?? ''}
-                    onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                    autoComplete="new-password"
-                    minLength={12}
-                    maxLength={1024}
-                    className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.password ? 'border-rose-300 focus:ring-rose-100' : 'border-slate-200 focus:border-[#58779d] focus:ring-blue-100'}`}
-                  />
-                  {formErrors.password ? (
-                    <span className="mt-1 block text-[11px] text-rose-600">{formErrors.password}</span>
-                  ) : (
-                    <span className="mt-1 block text-[10px] text-slate-400">
-                      At least 12 characters. The new user activates their account from the welcome email.
-                    </span>
-                  )}
-                </label>
+                  <div className="relative mt-2">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      value={form.password ?? ''}
+                      onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+
+                      className={`h-10 w-full rounded-lg border px-3 text-sm outline-none focus:ring-2 ${formErrors.password ? 'border-rose-300 focus:ring-rose-100' : 'border-slate-200 focus:border-[#58779d] focus:ring-blue-100'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-3 text-slate-500 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08086F]/60"
+                    >
+                      <EyeIcon off={showPassword} />
+                    </button>
+                  </div>
+                </div>
               ) : null}
               <label className="sm:col-span-2">
                 <FieldLabel required>Position</FieldLabel>
@@ -1018,7 +1012,7 @@ export function UserManagementDashboard() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#18365f] px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#234875] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-navy px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-brand-navy-raised disabled:cursor-not-allowed disabled:opacity-60 "
               >
                 {submitting ? (
                   <>
@@ -1128,12 +1122,10 @@ export function UserManagementDashboard() {
 function StatCard({
   label,
   value,
-  detail,
   tone = 'blue',
 }: {
   label: string;
   value: number;
-  detail: string;
   tone?: 'blue' | 'green' | 'amber' | 'purple';
 }) {
   const tones = {
@@ -1143,7 +1135,7 @@ function StatCard({
     purple: 'bg-violet-50 text-violet-700',
   };
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/[0.02]">
+    <article className="rounded-sm border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/[0.02]">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium text-slate-500">{label}</p>
@@ -1153,7 +1145,6 @@ function StatCard({
           <Icon name="users" className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-slate-400">{detail}</p>
     </article>
   );
 }
@@ -1181,7 +1172,7 @@ function ModalShell({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl shadow-slate-950/25"
+        className="my-auto w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl shadow-slate-950/25"
       >
         <div className="flex items-start justify-between gap-3">
           <div>

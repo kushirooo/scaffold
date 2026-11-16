@@ -31,7 +31,7 @@ const MONO = 'font-[family-name:var(--font-login-mono)]';
 
 const inputClass = `${MONO} block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-2 focus:ring-offset-[#08086F]`;
 
-function EyeIcon({ off }: { off: boolean }) {
+export function EyeIcon({ off }: { off: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -231,7 +231,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-md bg-white px-4 py-2.5 text-[13px] font-medium text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#08086F] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-md  bg-white text-brand-navy px-4 py-2.5 text-[13px] font-medium transition-colors hover:bg-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#08086F] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? 'Logging in…' : 'Log In'}
               </button>

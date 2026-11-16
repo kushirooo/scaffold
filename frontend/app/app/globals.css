@@ -1,43 +1,114 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * DESIGN.md v1.1.0 is the single source of truth for these tokens.
+ * `@theme static` emits every variable even when no utility uses it, so other
+ * stylesheets (e.g. us19.css) can reference them with var(--color-...).
+ *
+ * Utility examples: `bg-brand-navy`, `bg-canvas`, `text-text-primary`,
+ * `border-border-default`, `text-status-completed-dot`, `rounded-2xl`,
+ * `shadow-card`, `font-display`.
+ *
+ * Spacing: Tailwind's default 4px step already matches the DESIGN.md scale
+ * (space-1/2/3/4/6/8/12 = p-1/2/3/4/6/8/12), so no spacing tokens are needed.
+ */
+@theme static {
+  /* §2.1 Brand and surfaces */
+  --color-brand-navy: #08086f; /* color-brand-navy */
+  --color-brand-navy-raised: #131375; /* color-brand-navy-raised */
+  --color-canvas: #f5f7ff; /* color-bg-canvas */
+  --color-surface: #ffffff; /* color-bg-surface */
+  --color-section-alt: #f0f3f8; /* color-bg-section-alt */
+  --color-footer: #101c36; /* color-bg-footer */
+  --color-dark-surface: #0d1630; /* color-bg-dark-surface */
+  --color-dark-raised: #19213a; /* color-bg-dark-raised */
+  --color-action-blue: #2545e1; /* color-action-blue */
+  --color-brand-blue-900: #1e3a8a; /* color-blue-900 (renamed to avoid Tailwind's blue-900) */
+
+  /* §2.1 Neutrals, borders and text */
+  --color-border-default: #b4bcdb; /* color-border-default */
+  --color-divider: #e8e8e8; /* color-divider */
+  --color-divider-soft: #dbdbdb; /* color-divider-soft */
+  --color-text-primary: #000000; /* color-text-primary */
+  --color-text-secondary: #334155; /* color-text-secondary */
+  --color-text-muted: #5e687b; /* color-text-muted */
+  --color-text-placeholder: #6b7280; /* DESIGN.md lists #94A3B8, which is 2.6:1 on white; darkened per §6 item 4 */
+  --color-text-on-navy: #ffffff; /* color-text-on-navy */
+  --color-text-on-dark: #ced0d5; /* color-text-on-dark */
+
+  /* §2.1 Status and feedback */
+  --color-status-completed-bg: #7fcba7; /* color-status-completed-bg */
+  --color-status-completed-dot: #009951; /* color-status-completed-dot */
+  --color-status-tender-bg: #fcb3ad; /* color-status-tender-bg */
+  --color-status-tender-dot: #c00f0c; /* color-status-tender-dot */
+  --color-danger: #ca3e3c; /* color-danger */
+  --color-danger-subtle: #fef2f2; /* color-danger-subtle */
+  --color-danger-text: #991b1b; /* color-danger-text */
+  --color-chart-done: #0097b2; /* color-chart-done */
+  --color-chart-progress: #518cc8; /* color-chart-progress */
+  --color-warning: #d97706; /* color-warning (proposed, not in Figma) */
+
+  /* §2.2 Typography. Load these with next/font and expose the CSS variables
+     --font-inter, --font-plex-mono and --font-crimson in layout.tsx. */
+  --font-sans: var(--font-inter), "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --font-display: var(--font-crimson), "Crimson Pro", "Crimson Text", Georgia, serif;
+
+  /* §2.4 Radius */
+  --radius-sm: 8px; /* inputs, buttons, form rows */
+  --radius-md: 10px; /* sidebar tiles, header avatar */
+  --radius-lg: 16px; /* form container */
+  --radius-xl: 20px; /* user avatar tiles */
+  --radius-2xl: 24px; /* cards, sidebar rail, modal */
+  --radius-full: 9999px; /* pills, badges */
+
+  /* §2.5 Elevation (proposed) */
+  --shadow-card: 0 4px 12px rgba(8, 8, 111, 0.08);
+  --shadow-modal: 0 24px 48px rgba(13, 22, 48, 0.2);
+
+  /* §2.5 Easing */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-/*
- * DESIGN.md §2.1 colour tokens (single source of truth for the project pages).
- * Utilities are generated from these, e.g. `bg-brand-navy`, `bg-canvas`,
- * `text-status-completed-dot`, `bg-danger-subtle`, `border-danger`.
- */
-@theme {
-  --color-brand-navy: #08086f; /* color-brand-navy */
-  --color-brand-navy-raised: #131375; /* color-brand-navy-raised */
-  --color-canvas: #f5f7ff; /* color-bg-canvas */
-  --color-dark-surface: #0d1630; /* color-bg-dark-surface */
-  --color-status-completed-bg: #7fcba7; /* color-status-completed-bg */
-  --color-status-completed-dot: #009951; /* color-status-completed-dot */
-  --color-danger: #ca3e3c; /* color-danger */
-  --color-danger-subtle: #fef2f2; /* color-danger-subtle */
-  --color-danger-text: #991b1b; /* color-danger-text */
-}
+:root {
+  color-scheme: light; /* DESIGN.md §1: no dark theme (non-goal) */
+  --background: var(--color-canvas);
+  --foreground: var(--color-text-primary);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* §2.5 Motion and layering (proposed) */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --z-sticky: 10;
+  --z-dropdown: 20;
+  --z-modal: 50;
+  --z-toast: 60;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* §7: visible focus ring on every focusable element. Never remove it. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-navy);
+  outline-offset: 2px;
+}
+
+/* §2.5: honor reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }

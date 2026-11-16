@@ -109,7 +109,7 @@ export default function DashboardPage() {
   if (!user) return null;
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl bg-canvas p-6 font-sans md:p-8">
+    <main className="mx-auto min-h-screen max-w-7xl bg-canvas p-6 font-sans md:p-8">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-light text-slate-900">Welcome, {user.fullName}</h1>
@@ -251,7 +251,7 @@ export default function DashboardPage() {
         </section>
       ) : (
         <section className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600">
-          No dashboard items are available for your role yet.
+          No dashboard items.
         </section>
       )}
     </main>

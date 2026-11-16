@@ -13,7 +13,7 @@ export interface ProjectAssignableUser {
   id: string;
   name: string;
   email: string;
-  systemRole: 'WORKER';
+  systemRole: 'WORKER' | 'PROJECT_MANAGER' | 'VIEWER';
 }
 
 export interface ProjectMember {
@@ -24,6 +24,7 @@ export interface ProjectMember {
   projectRole: ProjectRole;
 }
 
+// GET /projects/page list
 export interface Project {
   id: string;
   ownerId: string;
