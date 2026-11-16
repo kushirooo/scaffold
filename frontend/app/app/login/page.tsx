@@ -31,7 +31,7 @@ const MONO = 'font-[family-name:var(--font-login-mono)]';
 
 const inputClass = `${MONO} block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white/70 focus:ring-offset-2 focus:ring-offset-[#08086F]`;
 
-function EyeIcon({ off }: { off: boolean }) {
+export function EyeIcon({ off }: { off: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
