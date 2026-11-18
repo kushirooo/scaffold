@@ -23,6 +23,22 @@ function productionEnv(
   };
 }
 
+/** `productionEnv` tuned for the Gmail API transport (ADR 0005). */
+function gmailProductionEnv(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return productionEnv({
+    EMAIL_TRANSPORT: 'gmail-api',
+    RESEND_API_KEY: undefined,
+    MAIL_FROM: 'RAF Consult PMS <rafconsultpms@gmail.com>',
+    GMAIL_CLIENT_ID: 'client-id.apps.googleusercontent.com',
+    GMAIL_CLIENT_SECRET: 'client-secret',
+    GMAIL_REFRESH_TOKEN: 'refresh-token',
+    GMAIL_SENDER: 'rafconsultpms@gmail.com',
+    ...overrides,
+  });
+}
+
 describe('validateEnvironment', () => {
   it('applies development defaults including lax, non-secure cookies', () => {
     const env = validateEnvironment({});
@@ -129,6 +145,8 @@ describe('validateEnvironment', () => {
     expect(env.SMTP_HOST).toBeUndefined();
     expect(env.SMTP_PORT).toBeUndefined();
     expect(env.RESEND_API_KEY).toBeUndefined();
+    expect(env.GMAIL_SENDER).toBeUndefined();
+    expect(env.GMAIL_FROM_NAME).toBeUndefined();
   });
 
   it('requires an explicit email transport in production', () => {
@@ -147,6 +165,71 @@ describe('validateEnvironment', () => {
     expect(() =>
       validateEnvironment(productionEnv({ RESEND_API_KEY: '' })),
     ).toThrow('RESEND_API_KEY is required when EMAIL_TRANSPORT=resend');
+  });
+
+  it('accepts gmail-api with OAuth credentials in production', () => {
+    const env = validateEnvironment(
+      gmailProductionEnv({
+        GMAIL_CLIENT_ID: 'client-id.apps.googleusercontent.com',
+        GMAIL_CLIENT_SECRET: 'client-secret',
+        GMAIL_REFRESH_TOKEN: 'refresh-token',
+        GMAIL_SENDER: 'rafconsultpms@gmail.com',
+        GMAIL_FROM_NAME: 'RAF Consult PMS',
+      }),
+    );
+
+    expect(env.EMAIL_TRANSPORT).toBe('gmail-api');
+    expect(env.GMAIL_CLIENT_ID).toBe('client-id.apps.googleusercontent.com');
+    expect(env.GMAIL_CLIENT_SECRET).toBe('client-secret');
+    expect(env.GMAIL_REFRESH_TOKEN).toBe('refresh-token');
+    expect(env.GMAIL_SENDER).toBe('rafconsultpms@gmail.com');
+    expect(env.GMAIL_FROM_NAME).toBe('RAF Consult PMS');
+  });
+
+  it('derives the Gmail display name from MAIL_FROM when GMAIL_FROM_NAME is absent', () => {
+    const env = validateEnvironment(
+      gmailProductionEnv({ GMAIL_FROM_NAME: undefined }),
+    );
+
+    expect(env.GMAIL_FROM_NAME).toBe('RAF Consult PMS');
+  });
+
+  it('requires every gmail-api credential', () => {
+    const configured = gmailProductionEnv({});
+    for (const key of [
+      'GMAIL_CLIENT_ID',
+      'GMAIL_CLIENT_SECRET',
+      'GMAIL_REFRESH_TOKEN',
+      'GMAIL_SENDER',
+    ] as const) {
+      expect(() =>
+        validateEnvironment({ ...configured, [key]: '' }),
+      ).toThrow(`${key} is required when EMAIL_TRANSPORT=gmail-api`);
+    }
+  });
+
+  it('requires MAIL_FROM to use the authorised Gmail sender address', () => {
+    expect(() =>
+      validateEnvironment(
+        gmailProductionEnv({ MAIL_FROM: 'RAF CONSULT MARS <no-reply@rafconsult.test>' }),
+      ),
+    ).toThrow(
+      'MAIL_FROM address must match GMAIL_SENDER when EMAIL_TRANSPORT=gmail-api',
+    );
+  });
+
+  it('rejects a GMAIL_SENDER containing line breaks', () => {
+    expect(() =>
+      validateEnvironment(
+        gmailProductionEnv({ GMAIL_SENDER: 'rafconsultpms@gmail.com\r\nBcc: evil@example.com' }),
+      ),
+    ).toThrow('GMAIL_SENDER must not contain line breaks');
+  });
+
+  it('rejects a GMAIL_SENDER that is not an email address', () => {
+    expect(() =>
+      validateEnvironment(gmailProductionEnv({ GMAIL_SENDER: 'not-an-address' })),
+    ).toThrow('GMAIL_SENDER must be an email address');
   });
 
   it('requires smtp credentials when smtp is selected', () => {

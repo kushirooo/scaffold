@@ -32,7 +32,8 @@ contradiction is escalated to the Lead; it is not resolved silently in an ADR.
 | [0001](0001-auth-transport-cookies.md) | Auth transport: httpOnly cookies, versioned sessions, CSRF header | Accepted | D2, D5 (+D1, D9) | §1.2, §5, §7 |
 | [0002](0002-schema-ownership-prisma.md) | Database schema ownership and Prisma baseline | Accepted | D3, D4 | §1.2, §18 |
 | [0003](0003-password-policy.md) | Password policy and hashing | Accepted (AC3 wording pending OPEN-1) | D11 | §9.2–§9.5 |
-| [0004](0004-email-transport.md) | Email transport and failure semantics | Accepted (AC2 wording pending OPEN-1) | D6, D7, D8 | §8, §10 |
+| [0004](0004-email-transport.md) | Email transport and failure semantics | Accepted (AC2 wording pending OPEN-1; amended by 0005) | D6, D7, D8 | §8, §10 |
+| [0005](0005-gmail-api-email-transport.md) | Gmail API transport for staging email (HTTPS, no SDK) | Accepted — supersedes the Mailtrap Sandbox API plan | Extends D7/D8 | §8, §10 |
 
 Related documents: [US01 API contract v1 (Bearer — superseded on Day 2)](../api-contract-us01.md)
 · [third-party notices](../third-party-notices.md) · [team collaboration protocol](../team/COLLABORATION.md)
@@ -98,3 +99,4 @@ the deviation stays labelled, and the item escalates rather than being quietly r
 | Date | Author | Change |
 |---|---|---|
 | 9 Nov 2026 | `architect` | Initial issue: ADR 0001–0004, decision log, ratification register, third-party notice stub |
+| 18 Nov 2026 | `lead` | ADR 0005: `EMAIL_TRANSPORT=gmail-api` for the deployed demo; extends ADR 0004's transport set and supersedes the unimplemented Mailtrap Sandbox API plan. Railway/Render block SMTP and no sending domain is available |

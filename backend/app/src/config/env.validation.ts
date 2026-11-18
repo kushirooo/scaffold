@@ -1,3 +1,5 @@
+import { parseMailbox, stripHeaderNewlines } from '../email/mailbox.js';
+
 const DEVELOPMENT_JWT_SECRET =
   'development-only-jwt-secret-change-me-before-deploying';
 const DEVELOPMENT_DATABASE_URL =
@@ -8,7 +10,7 @@ const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 export type CookieSameSite = 'lax' | 'strict' | 'none';
 
-export type EmailTransport = 'smtp' | 'resend' | 'memory';
+export type EmailTransport = 'smtp' | 'resend' | 'gmail-api' | 'memory';
 
 export interface ValidatedEnvironment {
   NODE_ENV: string;
@@ -34,6 +36,14 @@ export interface ValidatedEnvironment {
   SMTP_USER?: string;
   SMTP_PASS?: string;
   RESEND_API_KEY?: string;
+  /** Gmail API (ADR 0005): OAuth user credentials, HTTPS only. */
+  GMAIL_CLIENT_ID?: string;
+  GMAIL_CLIENT_SECRET?: string;
+  GMAIL_REFRESH_TOKEN?: string;
+  /** Authorised Gmail account; must match the address in MAIL_FROM. */
+  GMAIL_SENDER?: string;
+  /** Display name for the From header; defaults to MAIL_FROM's name. */
+  GMAIL_FROM_NAME?: string;
 }
 
 function isLocalHostname(hostname: string): boolean {
@@ -113,7 +123,12 @@ function parseSameSite(raw: unknown): CookieSameSite {
   throw new Error('COOKIE_SAMESITE must be one of "lax", "strict" or "none"');
 }
 
-const EMAIL_TRANSPORTS = new Set<EmailTransport>(['smtp', 'resend', 'memory']);
+const EMAIL_TRANSPORTS = new Set<EmailTransport>([
+  'smtp',
+  'resend',
+  'gmail-api',
+  'memory',
+]);
 const DEVELOPMENT_MAIL_FROM =
   'RAF CONSULT MARS <no-reply@rafconsult.test>';
 const DEVELOPMENT_ADMIN_ALERT_EMAIL = 'admin@rafconsult.test';
@@ -132,7 +147,7 @@ function parseEmailTransport(
   const value = String(raw).toLowerCase() as EmailTransport;
   if (!EMAIL_TRANSPORTS.has(value)) {
     throw new Error(
-      'EMAIL_TRANSPORT must be one of "smtp", "resend" or "memory"',
+      'EMAIL_TRANSPORT must be one of "smtp", "resend", "gmail-api" or "memory"',
     );
   }
   if (isProduction && value === 'memory') {
@@ -251,6 +266,14 @@ function parseFrontendUrl(raw: string, isProduction: boolean): string {
   return raw;
 }
 
+function requireGmailValue(name: string, raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  if (!value) {
+    throw new Error(`${name} is required when EMAIL_TRANSPORT=gmail-api`);
+  }
+  return value;
+}
+
 /**
  * Validates the environment before any provider is created so the API never
  * boots with a missing database URL, a weak JWT secret, a wildcard CORS
@@ -343,6 +366,11 @@ export function validateEnvironment(
   let smtpUser: string | undefined;
   let smtpPass: string | undefined;
   let resendApiKey: string | undefined;
+  let gmailClientId: string | undefined;
+  let gmailClientSecret: string | undefined;
+  let gmailRefreshToken: string | undefined;
+  let gmailSender: string | undefined;
+  let gmailFromName: string | undefined;
 
   if (emailTransport === 'smtp') {
     smtpHost = String(config.SMTP_HOST ?? '').trim();
@@ -369,6 +397,44 @@ export function validateEnvironment(
     }
   }
 
+  if (emailTransport === 'gmail-api') {
+    gmailClientId = requireGmailValue('GMAIL_CLIENT_ID', config.GMAIL_CLIENT_ID);
+    gmailClientSecret = requireGmailValue(
+      'GMAIL_CLIENT_SECRET',
+      config.GMAIL_CLIENT_SECRET,
+    );
+    gmailRefreshToken = requireGmailValue(
+      'GMAIL_REFRESH_TOKEN',
+      config.GMAIL_REFRESH_TOKEN,
+    );
+
+    const rawSender = String(config.GMAIL_SENDER ?? '');
+    if (/[\r\n]/.test(rawSender)) {
+      throw new Error('GMAIL_SENDER must not contain line breaks');
+    }
+    gmailSender = parseMailbox(
+      requireGmailValue('GMAIL_SENDER', config.GMAIL_SENDER),
+    ).email;
+    if (!gmailSender.includes('@')) {
+      throw new Error('GMAIL_SENDER must be an email address');
+    }
+
+    // Gmail only allows the authenticated account (or a verified alias) as
+    // From, so MAIL_FROM may contribute a display name but must not point at a
+    // different address.
+    const mailFromAddress = parseMailbox(mailFrom).email;
+    if (mailFromAddress.toLowerCase() !== gmailSender.toLowerCase()) {
+      throw new Error(
+        'MAIL_FROM address must match GMAIL_SENDER when EMAIL_TRANSPORT=gmail-api',
+      );
+    }
+
+    gmailFromName =
+      stripHeaderNewlines(String(config.GMAIL_FROM_NAME ?? '')) ||
+      parseMailbox(mailFrom).name ||
+      'RAF Consult PMS';
+  }
+
   return {
     NODE_ENV: nodeEnv,
     PORT: port,
@@ -391,5 +457,10 @@ export function validateEnvironment(
     SMTP_USER: smtpUser,
     SMTP_PASS: smtpPass,
     RESEND_API_KEY: resendApiKey,
+    GMAIL_CLIENT_ID: gmailClientId,
+    GMAIL_CLIENT_SECRET: gmailClientSecret,
+    GMAIL_REFRESH_TOKEN: gmailRefreshToken,
+    GMAIL_SENDER: gmailSender,
+    GMAIL_FROM_NAME: gmailFromName,
   };
 }

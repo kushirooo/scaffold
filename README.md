@@ -47,6 +47,10 @@ Both test suites migrate and seed their own database; the e2e guard refuses to r
 
 Import [docs/http/us01.postman_collection.json](docs/http/us01.postman_collection.json), set the collection variable `password` to the value of `SEED_PASSWORD`, and run the requests top to bottom. Postman stores the httpOnly cookie automatically; the collection tests the cookie flags, CSRF 403, CORS preflight, logout revocation and the old-cookie 401. For the US18/US19 flow (forgot → reset → login → change), use [docs/http/sprint1.http](docs/http/sprint1.http) with a cookie-jar HTTP client and paste the Mailtrap token into the variable.
 
+## Deploying to staging (Railway API + Render web)
+
+The step-by-step runbook is [docs/deployment/railway.md](docs/deployment/railway.md): a Railway project with a managed PostgreSQL service and the NestJS API (`/backend/app`), plus the Next.js web app (`/frontend/app`) on Render. It covers the exact Railway/Render settings, the confirmed `502` boot-crash cause (`EMAIL_TRANSPORT` missing), pre-deploy migrations, demo seeding, the Gmail API transport (`EMAIL_TRANSPORT=gmail-api`, ADR 0005) with its OAuth refresh-token setup, and the demo-day checklist. Node 24 is pinned with `.nvmrc` in each service.
+
 ## Repository layout
 
 ```
