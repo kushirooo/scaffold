@@ -149,7 +149,11 @@ curl -i https://<api>/health        # 200 {"status":"ok","db":"up"}
 The Google Cloud project and OAuth web client already exist
 (`project_id: raf-consult-pms`, redirect URI `https://developers.google.com/oauthplayground`).
 
-1. **Enable the Gmail API** (already confirmed): APIs & Services → Library → Gmail API → Enable.
+1. **Enable the Gmail API in the project that owns the OAuth client.** The client id
+   (`48830878070-…apps.googleusercontent.com`) starts with the Google Cloud **project number**;
+   enable Gmail API in exactly that project (APIs & Services → Library → Gmail API → Enable).
+   Enabling it in a different project yields `403 Gmail API has not been used in project …
+   before or it is disabled` even though the token and scope are valid.
 2. **OAuth consent screen** → External:
    - add the scope `https://www.googleapis.com/auth/gmail.send`;
    - add `rafconsultpms@gmail.com` under **Test users**.
@@ -264,6 +268,7 @@ Local `npm run db:migrate`/`db:seed` cannot reach the Railway DB directly: the i
 | `/health` returns 503 `db: down` | `DATABASE_URL` not a reference to `${{Postgres.DATABASE_URL}}`, wrong service name, or Postgres starting; redeploy. |
 | **Publish App** disabled / privacy-policy URL required | Expected without an owned domain: stay in **Testing** for the demo. Publishing requires brand + restricted-scope verification (weeks), a domain verified in Search Console, and a real privacy policy on that domain; an unverified publish would still show the warning and cap the app at 100 users. |
 | Emails fail with `invalid_grant` | Refresh token expired/revoked (Testing mode or password change). Regenerate via OAuth Playground and update Railway. |
+| Gmail 403 `Gmail API has not been used in project … before or it is disabled` | Gmail API is not enabled in the project that owns `GMAIL_CLIENT_ID`. Enable it in that project (the client-id prefix is the project number), wait a few minutes, then retry. Token/scope can be perfectly valid and this still happens. |
 | Gmail 403/400 about From/recipient | `GMAIL_SENDER` is not the authorised account, or the recipient is invalid (`@rafconsult.test` is not deliverable — use real Gmail addresses). |
 | Gmail 429 / daily limit message | Account sending quota (~500 recipients/day); wait or use another account. |
 | `Deployment failed` at pre-deploy | Migration failed; read pre-deploy logs, fix data/migration, redeploy. |
