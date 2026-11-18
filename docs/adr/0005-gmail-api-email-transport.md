@@ -58,19 +58,26 @@ environment changes that calculus:
    request persists, one best-effort admin alert is attempted, one structured log is
    written, and the token/body/recipient are never logged. 429 is logged once as
    `email_provider_rate_limited` without PII.
-8. **Operational mode.** The OAuth app must be published (or the refresh token
-   regenerated within the 7-day Testing window) before a demo; a Testing-status refresh
-   token expires after about 7 days. The app depends on one Gmail account and its
-   ~500-recipient daily sending limit; demo recipients must be real addresses
-   (`@rafconsult.test` addresses do not exist).
+8. **Operational mode (demo).** The deployed demo runs with the OAuth app in **Testing**
+   and `rafconsultpms@gmail.com` on the test-user list: no publishing, verification, domain
+   or privacy policy is required, and Testing supports up to 100 test users. Testing refresh
+   tokens expire about 7 days after authorisation, so the token is minted close to the demo.
+   Publishing to production is not a shortcut: `gmail.send` is a restricted scope, so it
+   needs brand and restricted-scope verification (including a CASA security assessment),
+   a domain verified in Search Console and a real privacy policy — unverified publishing is
+   blocked by those branding prerequisites and would still show the unverified warning with
+   a 100-user cap. The app depends on one Gmail account and its ~500-recipient daily
+   sending limit; demo recipients must be real addresses (`@rafconsult.test` addresses do
+   not exist).
 
 ## Consequences
 
 - Staging can send real email with no domain, no SMTP egress and no extra provider,
   at the cost of depending on one team Gmail account and its quota.
 - The demo/evidence must say emails come from `rafconsultpms@gmail.com` and respect the
-  ~500/day limit; the testing-mode token expiry is a known operational risk with a
-  documented pre-demo checklist.
+  ~500/day limit; the Testing-mode token rotation is a known operational risk with a
+  documented pre-demo checklist. Continuing beyond the demo needs either periodic
+  re-authorisation or the verified-domain path.
 - Mailtrap Sandbox API is not implemented; the previous plan is superseded rather than
   left half-built. Resend stays in the codebase for a future verified-domain setup.
 - If the Gmail account's token is revoked/expired (`invalid_grant`), email fails but
@@ -85,4 +92,5 @@ environment changes that calculus:
 | Mailtrap/Gmail SMTP | Deployed hosts block outbound SMTP; works locally only |
 | `googleapis` SDK | Large CJS dependency, ESM/build risk on a free plan for one REST call |
 | Google service account with domain-wide delegation | Requires a Workspace domain; the team only has consumer Gmail accounts |
+| Publish the app unverified for the demo | Blocked by the branding prerequisites (owned/verified domain + publicly reachable privacy policy); for `gmail.send` it would still require restricted-scope verification and show the unverified warning with a 100-user cap. Testing mode already covers the demo |
 | Keep mail to the console for the demo | US18/US19 evidence and a real inbox demo are project requirements |
