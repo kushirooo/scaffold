@@ -3,6 +3,7 @@ import {
   type EmailSenderConfigSource,
   createEmailSender,
 } from './email.module.js';
+import { GmailEmailSender } from './senders/gmail-email.sender.js';
 import { MemoryEmailSender } from './senders/memory-email.sender.js';
 import { ResendEmailSender } from './senders/resend-email.sender.js';
 import { SmtpEmailSender } from './senders/smtp-email.sender.js';
@@ -77,6 +78,26 @@ describe('createEmailSender', () => {
         }),
       ),
     ).toBeInstanceOf(ResendEmailSender);
+  });
+
+  it('chooses the Gmail API adapter and requires its credentials', () => {
+    const config = configSource({
+      ...BASE_CONFIG,
+      EMAIL_TRANSPORT: 'gmail-api',
+      GMAIL_CLIENT_ID: 'client-id.apps.googleusercontent.com',
+      GMAIL_CLIENT_SECRET: 'client-secret',
+      GMAIL_REFRESH_TOKEN: 'refresh-token',
+      GMAIL_SENDER: 'rafconsultpms@gmail.com',
+      GMAIL_FROM_NAME: 'RAF Consult PMS',
+    });
+
+    expect(createEmailSender(config)).toBeInstanceOf(GmailEmailSender);
+
+    expect(() =>
+      createEmailSender(
+        configSource({ ...BASE_CONFIG, EMAIL_TRANSPORT: 'gmail-api' }),
+      ),
+    ).toThrow('missing configuration: GMAIL_CLIENT_ID');
   });
 
   it('warns when memory is used outside tests', () => {

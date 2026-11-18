@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Accepted — D6, D7, D8; US18 AC2 wording pending `OPEN-1` |
+| Status | Accepted — D6, D7, D8; US18 AC2 wording pending `OPEN-1`; **amended by [ADR 0005](0005-gmail-api-email-transport.md)** (transport set extended with `gmail-api` for the deployed demo) |
 | Date | 9 November 2026 |
 | Decisions | D6 (INVITE 24 h / RESET 15 min), D7 (Mailtrap, no Mailhog), D8 (Resend via `fetch`, no SDK) |
 | Plan references | `SPRINT1_PLAN.md` §4 OPEN-1, §5, §8, §9.1, §10, §11, §20 R3 |
@@ -20,7 +20,9 @@ deviation is a single-use link, no password, tracked as `OPEN-1`.
 
 ## Decision
 
-1. **Transport selection.** `EMAIL_TRANSPORT` is one of `smtp` | `resend` | `memory`.
+1. **Transport selection.** `EMAIL_TRANSPORT` is one of `smtp` | `resend` | `memory`
+   (amended by ADR 0005: `gmail-api` is also accepted for the deployed demo, because
+   deployed hosts block outbound SMTP and no sending domain is available).
    Local dev uses `smtp` (Mailtrap sandbox); tests and CI use `memory` (in-process array,
    assertions only, never real mail); staging/demo uses `resend`. `memory` is the default
    when `NODE_ENV=test`, so a missing variable cannot send real mail in CI

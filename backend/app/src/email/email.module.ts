@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EmailTransport } from '../config/env.validation.js';
 import { EMAIL_SENDER, type EmailSender } from './email-sender.js';
 import { EmailService } from './email.service.js';
+import { GmailEmailSender } from './senders/gmail-email.sender.js';
 import { MemoryEmailSender } from './senders/memory-email.sender.js';
 import { ResendEmailSender } from './senders/resend-email.sender.js';
 import { SmtpEmailSender } from './senders/smtp-email.sender.js';
@@ -52,6 +53,16 @@ export function createEmailSender(config: EmailSenderConfigSource): EmailSender 
       return new ResendEmailSender({
         apiKey: config.getOrThrow<string>('RESEND_API_KEY'),
         from,
+        replyTo,
+      });
+
+    case 'gmail-api':
+      return new GmailEmailSender({
+        clientId: config.getOrThrow<string>('GMAIL_CLIENT_ID'),
+        clientSecret: config.getOrThrow<string>('GMAIL_CLIENT_SECRET'),
+        refreshToken: config.getOrThrow<string>('GMAIL_REFRESH_TOKEN'),
+        sender: config.getOrThrow<string>('GMAIL_SENDER'),
+        fromName: config.getOrThrow<string>('GMAIL_FROM_NAME'),
         replyTo,
       });
 
