@@ -153,24 +153,35 @@ The Google Cloud project and OAuth web client already exist
 2. **OAuth consent screen** → External:
    - add the scope `https://www.googleapis.com/auth/gmail.send`;
    - add `rafconsultpms@gmail.com` under **Test users**.
-3. **Publish the app before demo day.** Click **Publish App** → status *In production*.
-   With a *Testing* status Google expires refresh tokens after ~7 days; publication removes
-   that cap. Because `gmail.send` is a restricted scope, Google may still show an
-   "unverified app" warning and may ask for verification — for a course demo with the team's
-   own accounts, continue past the warning. If publishing is blocked, keep the app in Testing
-   and regenerate the refresh token the day before the demo (Friday 2026-11-20, UTC+8).
-4. **Get the refresh token** after publishing:
+3. **Keep the app in Testing — do not publish for the demo.** For an external app using the
+   restricted `gmail.send` scope, "In production" needs brand **and** restricted-scope
+   verification (including a CASA security assessment, typically weeks), a home page and
+   privacy policy hosted on a domain you own and have verified in Search Console, and a
+   publicly reachable privacy-policy URL. Without an owned domain the **Publish App** button
+   stays unavailable, and that is fine: **Testing** mode needs no domain, no privacy policy and
+   supports up to 100 test users — it is the supported mode for development/staging demos. Test
+   users see the standard "Google hasn't verified this app" warning and continue via
+   *Advanced → Go to app*.
+4. **Get the refresh token while the app is in Testing** (Testing tokens expire about 7 days
+   after authorisation, so mint it close to the demo — one minted on Wednesday/Thursday still
+   covers Friday 2026-11-20):
    - open <https://developers.google.com/oauthplayground>;
    - ⚙️ → *Use your own OAuth credentials* → paste the client id + secret;
    - Step 1: scope `https://www.googleapis.com/auth/gmail.send` → **Authorize APIs** → sign in
-     as `rafconsultpms@gmail.com` → allow;
+     as `rafconsultpms@gmail.com` (Advanced → Go to app if warned) → allow;
    - Step 2: **Exchange authorization code for tokens** → copy the **Refresh token**.
 5. Put the refresh token in Railway `GMAIL_REFRESH_TOKEN` (never in git). Add the other
    `GMAIL_*` variables from §4 and redeploy.
 6. Confirm from the deploy logs that the validation error is gone, then send a test email
    (§8).
 
-> If Rotate/revoke happens later, refresh fails with `invalid_grant`; email stops but accounts
+> **After the course/demo**, if the app must keep sending: either repeat the OAuth Playground
+> step about every 7 days, or move to a verified setup (owned domain + privacy policy + brand
+> and restricted-scope verification) or a verified-domain email API (Resend/Mailtrap live).
+> Publishing unverified is not a shortcut: it stays blocked by the branding prerequisites and
+> still caps the app at 100 users.
+
+> If the token is revoked/expired, refresh fails with `invalid_grant`; email stops but accounts
 > and password resets still succeed (ADR 0004/0005). Regenerate the token and update Railway.
 
 ## 8. End-to-end verification (demo evidence)
@@ -230,8 +241,9 @@ Local `npm run db:migrate`/`db:seed` cannot reach the Railway DB directly: the i
 
 ## 11. Demo-day checklist (Friday 2026-11-20, UTC+8)
 
-- [ ] OAuth app **In production**, refresh token generated **after** publishing and stored in
-      Railway (`GMAIL_REFRESH_TOKEN`).
+- [ ] OAuth app still in **Testing**, `rafconsultpms@gmail.com` on **Test users**, and a
+      refresh token minted within the last 7 days (ideally Thursday/Friday) stored in Railway
+      (`GMAIL_REFRESH_TOKEN`). No publishing/domain/privacy policy is required for the demo.
 - [ ] Railway `api` deployment is Active; `/health` returns 200; no boot error in logs.
 - [ ] Render web service awake (open it ~5 minutes before the demo; free tier sleeps).
 - [ ] Browser is Chrome; login works from Render → Railway and the `mars_at` cookie is present.
@@ -239,8 +251,8 @@ Local `npm run db:migrate`/`db:seed` cannot reach the Railway DB directly: the i
 - [ ] Forgot-password → reset email arrives; reset link works.
 - [ ] Screenshots of the inbox (From, subject, link) and of the reset flow captured.
 - [ ] `scripts/smoke-staging.sh` passes against the deployed API.
-- [ ] If the refresh token was generated while the app was in Testing and is >7 days old,
-      regenerate it before the demo.
+- [ ] If the Testing-mode refresh token is >7 days old, mint a fresh one (no publishing or
+      verification is involved).
 
 ## 12. Troubleshooting
 
@@ -250,6 +262,7 @@ Local `npm run db:migrate`/`db:seed` cannot reach the Railway DB directly: the i
 | Boot fails `MAIL_FROM address must match GMAIL_SENDER` | Set `MAIL_FROM="RAF Consult PMS <rafconsultpms@gmail.com>"` (same address as `GMAIL_SENDER`). |
 | Boot fails `GMAIL_… is required when EMAIL_TRANSPORT=gmail-api` | Add the missing Gmail variable in Railway. |
 | `/health` returns 503 `db: down` | `DATABASE_URL` not a reference to `${{Postgres.DATABASE_URL}}`, wrong service name, or Postgres starting; redeploy. |
+| **Publish App** disabled / privacy-policy URL required | Expected without an owned domain: stay in **Testing** for the demo. Publishing requires brand + restricted-scope verification (weeks), a domain verified in Search Console, and a real privacy policy on that domain; an unverified publish would still show the warning and cap the app at 100 users. |
 | Emails fail with `invalid_grant` | Refresh token expired/revoked (Testing mode or password change). Regenerate via OAuth Playground and update Railway. |
 | Gmail 403/400 about From/recipient | `GMAIL_SENDER` is not the authorised account, or the recipient is invalid (`@rafconsult.test` is not deliverable — use real Gmail addresses). |
 | Gmail 429 / daily limit message | Account sending quota (~500 recipients/day); wait or use another account. |
