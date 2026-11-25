@@ -285,6 +285,19 @@ describe('validateEnvironment', () => {
     }
   });
 
+  it('defaults APP_TIMEZONE to Asia/Kuala_Lumpur and accepts another IANA zone', () => {
+    expect(validateEnvironment({}).APP_TIMEZONE).toBe('Asia/Kuala_Lumpur');
+    expect(
+      validateEnvironment({ APP_TIMEZONE: 'Europe/London' }).APP_TIMEZONE,
+    ).toBe('Europe/London');
+  });
+
+  it('rejects an unknown APP_TIMEZONE', () => {
+    expect(() => validateEnvironment({ APP_TIMEZONE: 'Mars/Olympus_Mons' })).toThrow(
+      'APP_TIMEZONE',
+    );
+  });
+
   it('parses a comma-separated admin alert list', () => {
     const env = validateEnvironment({
       ADMIN_ALERT_EMAIL: 'ops@rafconsult.test, admin@rafconsult.test',
