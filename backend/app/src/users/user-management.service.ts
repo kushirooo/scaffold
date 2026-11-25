@@ -273,17 +273,29 @@ export class UserManagementService {
     if (existing.role === 'ADMIN') await this.ensureAnotherActiveAdmin(id);
 
     // Project.owner has onDelete: Cascade, so deleting an owner would silently
-    // destroy their projects (archived ones included). One conditional delete
-    // keeps the check and the write atomic: a project created in between cannot
-    // slip past a separate count. `findUser` above already proved the row exists.
+    // destroy their projects (archived ones included). Task assignee/creator
+    // use onDelete: Restrict, so a user with tasks must be blocked explicitly.
+    // One conditional delete keeps the checks and the write atomic.
     const { count } = await this.prisma.user.deleteMany({
-      where: { id, ownedProjects: { none: {} } },
+      where: {
+        id,
+        ownedProjects: { none: {} },
+        assignedTasks: { none: {} },
+        createdTasks: { none: {} },
+      },
     });
     if (count === 0) {
+      if (existing._count.ownedProjects > 0) {
+        throw new ConflictException({
+          code: 'USER_OWNS_PROJECTS',
+          message:
+            'This user owns projects. Reassign or remove those projects before deleting the account.',
+        });
+      }
       throw new ConflictException({
-        code: 'USER_OWNS_PROJECTS',
+        code: 'USER_HAS_TASKS',
         message:
-          'This user owns projects. Reassign or remove those projects before deleting the account.',
+          'This user has tasks. Reassign or remove them before deleting the account.',
       });
     }
   }
@@ -296,6 +308,13 @@ export class UserManagementService {
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: { createdAt: true },
+        },
+        _count: {
+          select: {
+            ownedProjects: true,
+            assignedTasks: true,
+            createdTasks: true,
+          },
         },
       },
     });
