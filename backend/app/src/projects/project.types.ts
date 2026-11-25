@@ -27,6 +27,12 @@ export interface ProjectResponse {
   }>;
 }
 
+/**
+ * Worker view of `GET /projects/assigned`. A worker must not learn the project
+ * budget, so this response is the PM project response without `budget`.
+ */
+export type WorkerProjectResponse = Omit<ProjectResponse, 'budget'>;
+
 export interface ProjectAssignableUser {
   id: string;
   name: string;

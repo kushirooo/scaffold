@@ -12,6 +12,7 @@ import type {
   ApiProjectMemberRole,
   ApiProjectStatus,
   ProjectResponse,
+  WorkerProjectResponse,
 } from './project.types.js';
 
 const RESTORE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -172,7 +173,9 @@ export class ProjectsService {
     return { projectId, userId, removed: true };
   }
 
-  async findAssignedToWorker(userId: string): Promise<ProjectResponse[]> {
+  async findAssignedToWorker(
+    userId: string,
+  ): Promise<WorkerProjectResponse[]> {
     const projects = await this.prisma.project.findMany({
       where: {
         isArchived: false,
@@ -181,7 +184,7 @@ export class ProjectsService {
       orderBy: { updatedAt: 'desc' },
       include: PROJECT_WITH_MEMBERS,
     });
-    return projects.map((project) => this.toResponse(project));
+    return projects.map((project) => this.toWorkerResponse(project));
   }
 
   async findOne(ownerId: string, id: string): Promise<ProjectResponse> {
@@ -289,6 +292,31 @@ export class ProjectsService {
       updatedAt: project.updatedAt.toISOString(),
       tasks: [],
       members: project.members.map((member) => this.toApiMember(member)),
+    };
+  }
+
+  /**
+   * `GET /projects/assigned` is WORKER only. A worker must not learn the
+   * project budget, so the budget is dropped from this response.
+   */
+  private toWorkerResponse(
+    project: ProjectWithMembers,
+  ): WorkerProjectResponse {
+    const response = this.toResponse(project);
+    return {
+      id: response.id,
+      ownerId: response.ownerId,
+      name: response.name,
+      description: response.description,
+      startDate: response.startDate,
+      endDate: response.endDate,
+      status: response.status,
+      isArchived: response.isArchived,
+      archivedAt: response.archivedAt,
+      createdAt: response.createdAt,
+      updatedAt: response.updatedAt,
+      tasks: response.tasks,
+      members: response.members,
     };
   }
 

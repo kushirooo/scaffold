@@ -166,6 +166,11 @@ describe('US04 project membership (e2e)', () => {
     expect(assignedProjects.body).toContainEqual(
       expect.objectContaining({ id: secondProject.id }),
     );
+    for (const project of assignedProjects.body as Array<
+      Record<string, unknown>
+    >) {
+      expect(project).not.toHaveProperty('budget');
+    }
 
     const notifications = await request(app.getHttpServer())
       .get('/notifications')
