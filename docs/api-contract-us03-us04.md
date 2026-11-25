@@ -15,7 +15,7 @@
 | GET | `/projects` | PM | — | `ProjectResponse[]` (owner's non-archived projects) |
 | GET | `/projects/archived` | PM | — | `ProjectResponse[]` |
 | GET | `/projects/assignable-workers` | PM | — | `ProjectAssignableUser[]` |
-| GET | `/projects/assigned` | WORKER | — | `ProjectResponse[]` (projects the worker is a member of) |
+| GET | `/projects/assigned` | WORKER | — | `WorkerProjectResponse[]` (projects the worker is a member of; no `budget`) |
 | GET | `/projects/:id` | PM | — | `ProjectResponse` |
 | PATCH | `/projects/:id` | PM | `UpdateProjectDto` | `ProjectResponse` |
 | DELETE | `/projects/:id` | PM | — | `ProjectResponse` (soft archive) |
@@ -71,6 +71,9 @@ interface ProjectResponse {
                    projectRole: 'Owner' | 'Member' | 'Contributor' }>;
 }
 
+/** `GET /projects/assigned` (WORKER only). The budget is not returned. */
+type WorkerProjectResponse = Omit<ProjectResponse, 'budget'>;
+
 interface ProjectAssignableUser { id: string; name: string; email: string; systemRole: 'WORKER' }
 interface ProjectMemberResponse { /* the members[] element */ }
 
@@ -81,6 +84,11 @@ interface ProjectAssignmentNotification {
 
 interface NotificationsReadAllResponse { updated: number } // rows changed from unread to read
 ```
+
+`GET /projects/assigned` is WORKER only. A worker must not learn the project budget, so
+this route returns `WorkerProjectResponse` (the project response without `budget`).
+`GET /projects`, `GET /projects/:id` and `GET /projects/archived` are PM routes and keep
+`budget`.
 
 `markRead` returns the same `ProjectAssignmentNotification` shape as `GET /notifications`,
 including the joined `projectName`; `readAt` is an ISO timestamp once read and unchanged by
