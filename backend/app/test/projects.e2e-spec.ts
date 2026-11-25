@@ -117,7 +117,12 @@ describe('US03 project lifecycle (e2e)', () => {
       .set('Cookie', projectManagerCookie)
       .expect(200);
     expect(listResponse.body).toContainEqual(
-      expect.objectContaining({ id: created.id, status: 'Active', updatedAt: expect.any(String) }),
+      expect.objectContaining({
+        id: created.id,
+        status: 'Active',
+        budget: 125000.5,
+        updatedAt: expect.any(String),
+      }),
     );
 
     await request(app.getHttpServer())
@@ -126,6 +131,7 @@ describe('US03 project lifecycle (e2e)', () => {
       .expect(200)
       .expect(({ body }) => {
         expect(body.name).toBe('US03 lifecycle project');
+        expect(body.budget).toBe(125000.5);
         expect(body.tasks).toEqual([]);
         expect(body.members).toHaveLength(1);
       });
