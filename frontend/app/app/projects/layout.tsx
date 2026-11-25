@@ -1,5 +1,4 @@
 import AuthGuard from '@/components/auth-guard';
-import ProjectManagerGuard from '@/components/project-manager-guard';
 import SessionProvider from '@/components/session-provider';
 
 export default function ProjectsLayout({
@@ -7,9 +6,7 @@ export default function ProjectsLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <SessionProvider>
-      <AuthGuard>
-        <ProjectManagerGuard>{children}</ProjectManagerGuard>
-      </AuthGuard>
+      <AuthGuard>{children}</AuthGuard>
     </SessionProvider>
   );
 }

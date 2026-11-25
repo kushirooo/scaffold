@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useMemo, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ProjectManagerGuard from '@/components/project-manager-guard';
 import { Project } from '../../types/project';
 import {
-  fetchProject,
   fetchArchivedProjects,
   archiveProject,
   restoreProject,
@@ -93,7 +93,7 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString();
 }
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
@@ -142,12 +142,10 @@ export default function ProjectsPage() {
     };
   }, [activeTab, refreshKey]);
 
-  // Status options come from the loaded data, so nothing here is hardcoded.
   const statusOptions = useMemo(
     () => Array.from(new Set(projects.map((p) => p.status))).sort(),
     [projects],
   );
-  // If the selected status no longer exists (tab switch / refresh), fall back to "all".
   const effectiveStatus =
     statusFilter !== ALL_STATUSES && statusOptions.includes(statusFilter)
       ? statusFilter
@@ -175,7 +173,7 @@ export default function ProjectsPage() {
   };
 
   const switchTab = (tab: 'active' | 'archived') => {
-    if (tab === activeTab) return; // same tab: the load effect would not re-run, so don't start loading
+    if (tab === activeTab) return;
     setLoading(true);
     setStatusFilter(ALL_STATUSES);
     setActiveTab(tab);
@@ -259,15 +257,11 @@ export default function ProjectsPage() {
             </span>
           </div>
 
-          {/* Archived projects are not readable through GET /projects/:id, so
-              the archived card must not link anywhere that would 404. */}
           {isArchivedTab ? (
             <h2 className={CARD_TITLE}>{project.name}</h2>
           ) : (
             <Link
               href={`/projects/${project.id}`}
-              // Stretched link: the ::after layer covers the whole card (it is `relative`),
-              // so clicking anywhere on the card opens the project.
               className="after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-navy"
             >
               <h2 className={`${CARD_TITLE} group-hover:text-brand-navy transition`}>
@@ -287,8 +281,6 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
-            {/* Visual cue only: the title link above already makes the card clickable,
-                so this isn't a second link to tab through. */}
             <span
               aria-hidden="true"
               className="text-xs font-mono font-semibold text-brand-navy group-hover:underline"
@@ -296,7 +288,6 @@ export default function ProjectsPage() {
               View Details &rarr;
             </span>
 
-            {/* relative z-10 lifts these above the card-wide link layer */}
             <div className="relative z-10 flex gap-2">{renderEditDelete(project)}</div>
           </div>
         )}
@@ -374,7 +365,6 @@ export default function ProjectsPage() {
                 }}
                 disabled={loading}
                 className="inline-flex items-center gap-2 rounded-lg  bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 hover:-translate-y-1"
-
               >
                 {loading ? 'Refreshing…' : 'Refresh'}
               </button>
@@ -389,7 +379,6 @@ export default function ProjectsPage() {
           </div>
         </header>
 
-        {/* Tabs */}
         <div className="mb-5 flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
           <button
             type="button"
@@ -432,7 +421,6 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <>
-            {/* Search / filter / view toolbar */}
             <section className="mb-5 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/[0.025] sm:p-5 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">
@@ -508,7 +496,6 @@ export default function ProjectsPage() {
               </div>
             </section>
 
-            {/* Projects list / grid */}
             {loading ? (
               <div className="flex min-h-[260px] flex-col items-center justify-center gap-3 text-slate-400">
                 <span className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-[#18365f]" />
@@ -565,7 +552,6 @@ export default function ProjectsPage() {
         )}
       </main>
 
-      {/* Delete Confirmation Modal */}
       {deleteModalId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-dark-surface text-white p-6 rounded-2xl max-w-md w-full shadow-2xl">
@@ -622,5 +608,13 @@ function StatCard({
         </div>
       </div>
     </article>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <ProjectManagerGuard>
+      <ProjectsPageContent />
+    </ProjectManagerGuard>
   );
 }
