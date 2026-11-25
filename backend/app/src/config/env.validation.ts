@@ -6,6 +6,9 @@ const DEVELOPMENT_DATABASE_URL =
   'postgresql://postgres:postgres@localhost:5432/raf_pms';
 const DEVELOPMENT_FRONTEND_URL = 'http://localhost:3000';
 
+/** Calendar time zone for "today" (Sprint 2 due dates and overdue rules). */
+const DEFAULT_APP_TIMEZONE = 'Asia/Kuala_Lumpur';
+
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 export type CookieSameSite = 'lax' | 'strict' | 'none';
@@ -17,6 +20,8 @@ export interface ValidatedEnvironment {
   PORT: number;
   CORS_ORIGIN: string;
   CORS_ORIGINS: string[];
+  /** IANA time zone that defines "today" for date rules. */
+  APP_TIMEZONE: string;
   DATABASE_URL: string;
   JWT_SECRET: string;
   JWT_TTL_SECONDS: number;
@@ -234,6 +239,25 @@ function parsePort(name: string, raw: unknown, fallback: number): number {
   return value;
 }
 
+/**
+ * An IANA time zone name, for example `Asia/Kuala_Lumpur`. The Intl runtime
+ * rejects unknown names, so one probe is enough to keep a bad value out of the
+ * date comparisons.
+ */
+function parseTimeZone(raw: unknown): string {
+  const value = String(raw ?? '').trim() || DEFAULT_APP_TIMEZONE;
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+  } catch {
+    throw new Error(
+      `APP_TIMEZONE "${value}" is not a valid IANA time zone name`,
+    );
+  }
+
+  return value;
+}
+
 function parseFrontendUrl(raw: string, isProduction: boolean): string {
   if (!raw) {
     throw new Error('FRONTEND_URL is required in production');
@@ -289,6 +313,8 @@ export function validateEnvironment(
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT must be an integer between 1 and 65535');
   }
+
+  const appTimeZone = parseTimeZone(config.APP_TIMEZONE);
 
   const corsOriginRaw = String(
     config.CORS_ORIGIN ?? (isProduction ? '' : 'http://localhost:3000'),
@@ -440,6 +466,7 @@ export function validateEnvironment(
     PORT: port,
     CORS_ORIGIN: corsOrigins.join(','),
     CORS_ORIGINS: corsOrigins,
+    APP_TIMEZONE: appTimeZone,
     DATABASE_URL: databaseUrl,
     JWT_SECRET: jwtSecret,
     JWT_TTL_SECONDS: jwtTtlSeconds,

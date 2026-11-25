@@ -42,6 +42,7 @@ jobs:
       E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/raf_pms_e2e
       JWT_SECRET: ci-only-secret-at-least-32-characters-long
       CORS_ORIGIN: http://localhost:3000
+      APP_TIMEZONE: Asia/Kuala_Lumpur
       COOKIE_SECURE: 'false'
       COOKIE_SAMESITE: lax
       SEED_PASSWORD: ci-only-seed-password
