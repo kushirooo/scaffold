@@ -330,6 +330,8 @@ export default function ProjectDetailsPage({
       <ProjectTasksSection
         projectId={project.id}
         projectOwnerId={project.ownerId}
+        projectStartDate={project.startDate}
+        projectEndDate={project.endDate}
         isProjectOwnerPM={canManageMembers}
         currentUserId={userId}
         members={project.members ?? []}

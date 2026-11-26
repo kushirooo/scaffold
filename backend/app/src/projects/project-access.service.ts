@@ -1,10 +1,19 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { apiError } from '../common/api-error.js';
+import { toDateOnly } from '../common/date.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 export interface ProjectAccess {
-  project: { id: string; ownerId: string; isArchived: boolean };
+  project: {
+    id: string;
+    ownerId: string;
+    isArchived: boolean;
+    /** Project start date, `YYYY-MM-DD`. */
+    startDate: string;
+    /** Project end date, `YYYY-MM-DD`. */
+    endDate: string;
+  };
   /** Every `ProjectMember` user id, including the OWNER row. */
   memberIds: Set<string>;
 }
@@ -86,6 +95,8 @@ export class ProjectAccessService {
         id: true,
         ownerId: true,
         isArchived: true,
+        startDate: true,
+        endDate: true,
         members: { select: { userId: true } },
       },
     });
@@ -99,6 +110,8 @@ export class ProjectAccessService {
         id: project.id,
         ownerId: project.ownerId,
         isArchived: project.isArchived,
+        startDate: toDateOnly(project.startDate),
+        endDate: toDateOnly(project.endDate),
       },
       memberIds: new Set(project.members.map((member) => member.userId)),
     };

@@ -4,6 +4,7 @@ import {
   isValidTransition,
   milestoneCompletionPercent,
   nextTaskStatus,
+  projectDateBoundary,
 } from './task.rules.js';
 
 describe('task rules', () => {
@@ -38,5 +39,23 @@ describe('task rules', () => {
     expect(isValidTransition('IN_PROGRESS', 'COMPLETED')).toBe(true);
     expect(isValidTransition('IN_PROGRESS', 'PENDING')).toBe(false);
     expect(isValidTransition('COMPLETED', 'IN_PROGRESS')).toBe(false);
+  });
+
+  it('keeps a due date inside the project dates with inclusive boundaries', () => {
+    expect(
+      projectDateBoundary('2026-11-01', '2026-11-01', '2026-12-31'),
+    ).toBeNull();
+    expect(
+      projectDateBoundary('2026-12-31', '2026-11-01', '2026-12-31'),
+    ).toBeNull();
+    expect(
+      projectDateBoundary('2026-11-15', '2026-11-01', '2026-12-31'),
+    ).toBeNull();
+    expect(
+      projectDateBoundary('2026-10-31', '2026-11-01', '2026-12-31'),
+    ).toBe('BEFORE_START');
+    expect(
+      projectDateBoundary('2027-01-01', '2026-11-01', '2026-12-31'),
+    ).toBe('AFTER_END');
   });
 });

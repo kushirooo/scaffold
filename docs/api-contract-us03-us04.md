@@ -17,7 +17,7 @@
 | GET | `/projects/assignable-workers` | PM | — | `ProjectAssignableUser[]` |
 | GET | `/projects/assigned` | WORKER | — | `WorkerProjectResponse[]` (projects the worker is a member of; no `budget`) |
 | GET | `/projects/:id` | PM | — | `ProjectResponse` |
-| PATCH | `/projects/:id` | PM | `UpdateProjectDto` | `ProjectResponse` |
+| PATCH | `/projects/:id` | PM | `UpdateProjectDto` | `ProjectResponse` (409 if new dates exclude tasks or milestones) |
 | DELETE | `/projects/:id` | PM | — | `ProjectResponse` (soft archive) |
 | POST | `/projects/:id/restore` | PM | — | `ProjectResponse` (within 30 days) |
 | POST | `/projects/:id/members` | PM | `AssignProjectMemberDto` | 201 `ProjectMemberResponse` |
@@ -46,6 +46,15 @@ is 400 (route UUID pipe). Both writes require the CSRF header; without it the re
 `UpdateProjectDto` — every field optional; at least one required (400 `"At least one project field must be provided"`).
 `startDate <= endDate` is validated (400 `"Start date must be on or before end date"`).
 `budget` is a number with at most 2 decimals, `>= 0`.
+
+**Project date guard:** when `startDate` or `endDate` changes, the update is rejected if an
+existing task or milestone would fall outside the new range:
+
+- 409 `{ "code": "PROJECT_DATES_BLOCK_TASKS", "message": "Move tasks that fall outside the new project dates first." }`
+- 409 `{ "code": "PROJECT_DATES_BLOCK_MILESTONES", "message": "Move milestones that fall outside the new project dates first." }`
+
+A name, description, budget or status update does not run this check. The PM moves the
+out-of-range items first, then updates the project dates.
 
 `AssignProjectMemberDto`
 ```json

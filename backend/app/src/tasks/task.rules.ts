@@ -9,6 +9,26 @@ export function isTaskOverdue(
   return status !== 'COMPLETED' && dueDate < today;
 }
 
+export type ProjectDateBoundary = 'BEFORE_START' | 'AFTER_END' | null;
+
+/**
+ * A task due date must sit inside the project dates. The boundaries are
+ * inclusive: a task may be due on the project start date or end date.
+ */
+export function projectDateBoundary(
+  dueDate: string,
+  projectStart: string,
+  projectEnd: string,
+): ProjectDateBoundary {
+  if (dueDate < projectStart) {
+    return 'BEFORE_START';
+  }
+  if (dueDate > projectEnd) {
+    return 'AFTER_END';
+  }
+  return null;
+}
+
 /** `floor`, never normal rounding: 199 of 200 tasks must show 99%. */
 export function milestoneCompletionPercent(
   completedTasks: number,

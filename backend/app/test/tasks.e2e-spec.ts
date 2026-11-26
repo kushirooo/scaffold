@@ -96,7 +96,10 @@ describe('US05 task management (e2e)', () => {
     }
   });
 
-  async function createProject(name: string): Promise<string> {
+  async function createProject(
+    name: string,
+    dates: { startDate?: string; endDate?: string } = {},
+  ): Promise<string> {
     const response = await request(app.getHttpServer())
       .post('/projects')
       .set('Cookie', pmCookie)
@@ -104,8 +107,8 @@ describe('US05 task management (e2e)', () => {
       .send({
         name: `${PREFIX}${name}`,
         description: 'US05 task coverage.',
-        startDate: '2026-11-01',
-        endDate: '2027-12-31',
+        startDate: dates.startDate ?? '2026-11-01',
+        endDate: dates.endDate ?? '2027-12-31',
         budget: 1000,
       })
       .expect(201);
@@ -773,5 +776,185 @@ describe('US05 task management (e2e)', () => {
     expect(
       await prisma.user.findUnique({ where: { id: tempUser.id } }),
     ).toBeNull();
+  });
+
+  it('keeps task due dates inside the project dates', async () => {
+    const startDate = addDays(TODAY, 10);
+    const endDate = addDays(TODAY, 30);
+    const projectId = await createProject('due-range', {
+      startDate,
+      endDate,
+    });
+    await addWorker(projectId);
+
+    const taskBody = (dueDate: string) => ({
+      title: 'Range task',
+      description: 'Task description.',
+      dueDate,
+      priority: 'MEDIUM',
+      assigneeId: workerId,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/projects/${projectId}/tasks`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send(taskBody(addDays(TODAY, 5)))
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.code).toBe('DUE_DATE_BEFORE_PROJECT_START');
+        expect(body.message).toBe(
+          'Due date cannot be before the project start date.',
+        );
+      });
+
+    const onStart = await createTask(projectId, { dueDate: startDate });
+    expect(onStart.dueDate).toBe(startDate);
+    const onEnd = await createTask(projectId, { dueDate: endDate });
+    expect(onEnd.dueDate).toBe(endDate);
+
+    const editable = await createTask(projectId, {
+      dueDate: addDays(TODAY, 15),
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/tasks/${editable.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ dueDate: addDays(TODAY, 5) })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.code).toBe('DUE_DATE_BEFORE_PROJECT_START');
+      });
+
+    await request(app.getHttpServer())
+      .patch(`/tasks/${editable.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ dueDate: addDays(TODAY, 35) })
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.code).toBe('DUE_DATE_AFTER_PROJECT_END');
+      });
+
+    await request(app.getHttpServer())
+      .patch(`/tasks/${editable.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ dueDate: startDate })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/tasks/${editable.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ dueDate: endDate })
+      .expect(200);
+
+    const earlyProjectId = await createProject('due-range-end', {
+      startDate: addDays(TODAY, -5),
+      endDate: addDays(TODAY, 5),
+    });
+    await addWorker(earlyProjectId);
+    await request(app.getHttpServer())
+      .post(`/projects/${earlyProjectId}/tasks`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send(taskBody(addDays(TODAY, 8)))
+      .expect(400)
+      .expect(({ body }) => {
+        expect(body.code).toBe('DUE_DATE_AFTER_PROJECT_END');
+        expect(body.message).toBe(
+          'Due date cannot be after the project end date.',
+        );
+      });
+
+    const legacyProjectId = await createProject('due-range-legacy', {
+      startDate: addDays(TODAY, -5),
+      endDate: addDays(TODAY, 5),
+    });
+    await addWorker(legacyProjectId);
+    const legacy = await createTask(legacyProjectId, {
+      dueDate: addDays(TODAY, 2),
+    });
+    await prisma.task.update({
+      where: { id: legacy.id },
+      data: { dueDate: new Date(`${addDays(TODAY, 8)}T00:00:00.000Z`) },
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/tasks/${legacy.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ title: 'Legacy edited' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.data.dueDate).toBe(addDays(TODAY, 8));
+      });
+  });
+
+  it('blocks project date changes that exclude tasks or milestones', async () => {
+    const projectId = await createProject('project-dates', {
+      startDate: addDays(TODAY, -5),
+      endDate: addDays(TODAY, 20),
+    });
+    await addWorker(projectId);
+    const task = await createTask(projectId, {
+      dueDate: addDays(TODAY, 5),
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/projects/${projectId}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ endDate: addDays(TODAY, 4) })
+      .expect(409)
+      .expect(({ body }) => {
+        expect(body.code).toBe('PROJECT_DATES_BLOCK_TASKS');
+        expect(body.message).toBe(
+          'Move tasks that fall outside the new project dates first.',
+        );
+      });
+
+    await request(app.getHttpServer())
+      .patch(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ dueDate: addDays(TODAY, 3) })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/projects/${projectId}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ endDate: addDays(TODAY, 4) })
+      .expect(200);
+
+    const milestoneProjectId = await createProject(
+      'project-dates-milestone',
+      {
+        startDate: addDays(TODAY, -5),
+        endDate: addDays(TODAY, 20),
+      },
+    );
+    await prisma.milestone.create({
+      data: {
+        projectId: milestoneProjectId,
+        name: 'Guard milestone',
+        targetDate: new Date(`${addDays(TODAY, 15)}T00:00:00.000Z`),
+      },
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/projects/${milestoneProjectId}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ endDate: addDays(TODAY, 10) })
+      .expect(409)
+      .expect(({ body }) => {
+        expect(body.code).toBe('PROJECT_DATES_BLOCK_MILESTONES');
+        expect(body.message).toBe(
+          'Move milestones that fall outside the new project dates first.',
+        );
+      });
   });
 });
