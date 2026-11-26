@@ -55,3 +55,20 @@ Verified:
 Rubric: read-only route exposes no token/password/cookie value and adds no logging; auth + global CSRF guards unchanged; no new tests were possible/needed here (C4 e2e covers read access, sort, counts, and the deleted-task case); no scope creep; no catalogued error wording changed.
 
 Checks run by reviewer: `tsc --noEmit -p tsconfig.build.json` → clean; `oxlint` on the two files → 0/0; `vitest run src/milestones/milestone.rules.spec.ts src/common/error-body.spec.ts` → 11/11 pass.
+
+## C4a — E2E lifecycle and validation (task-5) — 2026-11-27 — PASS
+
+Scope: only the new untracked `test/milestones.e2e-spec.ts` (383 lines, 9 cases); `git status` shows nothing else — no source, test-support, global-setup, or config edit.
+
+Findings: none.
+
+Verified:
+- Card command run twice: `npx vitest run --config ./vitest.config.e2e.ts test/milestones.e2e-spec.ts` → 9/9 pass both times (490 ms, 1011 ms). The second run proves beforeAll/afterAll cleanup is idempotent.
+- Assertions are behavioural, not existence-only: exact messages/codes per §13.1/§13.2 (`Milestone created/updated successfully.`, `INVALID_TARGET_DATE`, `VALIDATION_FAILED`, `Name is required.`, `Name must be 150 characters or fewer.`, empty-PATCH message, `INVALID_ID`), and computed/trimmed values via `toMatchObject` (zeros, `isCompleted`, `isOverdue` from a −1 day target, trimmed name/description/targetDate, `description: null` clears).
+- Sort case asserts the exact name array `['Gamma','Alpha','Beta']` (dates +10/+20/+20) — fails on wrong order, wrong direction, or another project's rows, so the presence-only list assertions are backed by it.
+- Isolation mirrors the passing US05 suite: `US06 ` project prefix and `us06-` user prefix cleaned in beforeAll + afterAll; membership inserted via `prisma.projectMember.create` so the US04 parallel notification-count assertion cannot clash (test comment states this). Fixture 2026-01-01 / 2027-12-31 and targets +10…+50 / −1 day keep task dates inside the v1.5 bounds.
+- Padded target date (` 2026-12-05 `) accepted and trimmed on POST and PATCH. This is the C2 Low finding fixed in `3a1dc26` (both DTOs now carry `@Transform(trim)`); the committed DTO was re-checked.
+- Absent cases are exactly the C4b split (permissions 403/404, CSRF/cookie, counts, soft delete, archived, US05 cross-check). No `.skip`, `.todo`, or `.only` anywhere in `test/`.
+- New file lint/type: `oxlint test/milestones.e2e-spec.ts` → 0/0; `tsc --noEmit -p tsconfig.json` reports no error in it (the 3 errors it reports are pre-existing, in untouched `src/accounts/welcome-email.service.spec.ts` and `test/auth.e2e-spec.ts`).
+
+Residual for C4b (not a C4a finding): plan §11.2 still needs the permission/CSRF/cookie/counts/soft-delete/US05 cross-check rows.
