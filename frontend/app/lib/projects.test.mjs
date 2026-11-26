@@ -5,6 +5,7 @@ import {
   RESTORE_WINDOW_DAYS,
   formatCurrency,
   isRestoreExpired,
+  projectDetailPath,
   restoreDeadline,
   restoreStatusLabel,
   toProjectApiError,
@@ -12,6 +13,14 @@ import {
 
 const ARCHIVED_AT = '2026-11-15T00:00:00.000Z';
 const DEADLINE = new Date('2026-12-15T00:00:00.000Z');
+
+test('builds the project detail path with an encoded id', () => {
+  assert.equal(
+    projectDetailPath('2b71d5e4-8c06-4a39-a7f3-1d9e5c0b6a84'),
+    '/projects/2b71d5e4-8c06-4a39-a7f3-1d9e5c0b6a84',
+  );
+  assert.equal(projectDetailPath('a/b c'), '/projects/a%2Fb%20c');
+});
 
 test('formats budgets as US dollars with exactly two decimal places', () => {
   assert.equal(formatCurrency(125000.5), '$125,000.50');
