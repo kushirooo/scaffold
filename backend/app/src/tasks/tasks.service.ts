@@ -15,6 +15,7 @@ import {
   isTaskOverdue,
   isValidTransition,
   milestoneCompletionPercent,
+  projectDateBoundary,
 } from './task.rules.js';
 import type {
   MilestoneProgress,
@@ -74,6 +75,26 @@ export class TasksService {
         HttpStatus.BAD_REQUEST,
         'DUE_DATE_IN_PAST',
         'Due date cannot be in the past.',
+      );
+    }
+
+    const boundary = projectDateBoundary(
+      input.dueDate,
+      access.project.startDate,
+      access.project.endDate,
+    );
+    if (boundary === 'BEFORE_START') {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        'DUE_DATE_BEFORE_PROJECT_START',
+        'Due date cannot be before the project start date.',
+      );
+    }
+    if (boundary === 'AFTER_END') {
+      throw apiError(
+        HttpStatus.BAD_REQUEST,
+        'DUE_DATE_AFTER_PROJECT_END',
+        'Due date cannot be after the project end date.',
       );
     }
 
@@ -179,15 +200,33 @@ export class TasksService {
     }
 
     if (input.dueDate !== undefined) {
-      if (
-        input.dueDate !== storedDueDate &&
-        isDateBefore(input.dueDate, today)
-      ) {
-        throw apiError(
-          HttpStatus.BAD_REQUEST,
-          'DUE_DATE_IN_PAST',
-          'Due date cannot be in the past.',
+      if (input.dueDate !== storedDueDate) {
+        if (isDateBefore(input.dueDate, today)) {
+          throw apiError(
+            HttpStatus.BAD_REQUEST,
+            'DUE_DATE_IN_PAST',
+            'Due date cannot be in the past.',
+          );
+        }
+        const boundary = projectDateBoundary(
+          input.dueDate,
+          access.project.startDate,
+          access.project.endDate,
         );
+        if (boundary === 'BEFORE_START') {
+          throw apiError(
+            HttpStatus.BAD_REQUEST,
+            'DUE_DATE_BEFORE_PROJECT_START',
+            'Due date cannot be before the project start date.',
+          );
+        }
+        if (boundary === 'AFTER_END') {
+          throw apiError(
+            HttpStatus.BAD_REQUEST,
+            'DUE_DATE_AFTER_PROJECT_END',
+            'Due date cannot be after the project end date.',
+          );
+        }
       }
       data.dueDate = dateFromInput(input.dueDate);
     }

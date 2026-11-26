@@ -210,6 +210,45 @@ export class ProjectsService {
     const endDate = input.endDate ?? this.toDateOnly(current.endDate);
     this.validateDateRange(startDate, endDate);
 
+    if (input.startDate !== undefined || input.endDate !== undefined) {
+      const newStart = dateFromInput(startDate);
+      const newEnd = dateFromInput(endDate);
+
+      const tasksOutside = await this.prisma.task.count({
+        where: {
+          projectId: id,
+          OR: [
+            { dueDate: { lt: newStart } },
+            { dueDate: { gt: newEnd } },
+          ],
+        },
+      });
+      if (tasksOutside > 0) {
+        throw new ConflictException({
+          code: 'PROJECT_DATES_BLOCK_TASKS',
+          message:
+            'Move tasks that fall outside the new project dates first.',
+        });
+      }
+
+      const milestonesOutside = await this.prisma.milestone.count({
+        where: {
+          projectId: id,
+          OR: [
+            { targetDate: { lt: newStart } },
+            { targetDate: { gt: newEnd } },
+          ],
+        },
+      });
+      if (milestonesOutside > 0) {
+        throw new ConflictException({
+          code: 'PROJECT_DATES_BLOCK_MILESTONES',
+          message:
+            'Move milestones that fall outside the new project dates first.',
+        });
+      }
+    }
+
     const data: Prisma.ProjectUpdateInput = {};
     if (input.name !== undefined) data.name = input.name.trim();
     if (input.description !== undefined) data.description = input.description.trim();
