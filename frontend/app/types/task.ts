@@ -36,6 +36,7 @@ export const TASK_PRIORITY_ORDER: readonly TaskPriority[] = [
 export interface Task {
   id: string;
   projectId: string;
+  projectName: string;
   title: string;
   description: string | null;
   dueDate: string;
@@ -45,11 +46,19 @@ export interface Task {
   assigneeIsMember: boolean;
   status: TaskStatus;
   milestoneId: string | null;
+  milestoneName: string | null;
   completedAt: string | null;
   createdBy: string;
+  createdByName: string;
   isOverdue: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** A milestone choice for the task form. */
+export interface MilestoneOption {
+  id: string;
+  name: string;
 }
 
 /** `POST /projects/:projectId/tasks` request body (§7.1). */

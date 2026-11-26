@@ -1,39 +1,27 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ProjectMember } from '@/types/project';
 import {
-  CreateTaskInput,
+  MilestoneOption,
   Task,
   TaskPriority,
   TaskStatus,
   TASK_PRIORITY_LABELS,
-  TASK_PRIORITY_ORDER,
   TASK_STATUS_LABELS,
   TASK_STATUS_ORDER,
 } from '@/types/task';
 import {
-  createTask,
+  deleteTask,
   fetchProjectTasks,
-  updateTask,
   updateTaskStatus,
 } from '@/services/taskService';
 import {
-  buildCreateTaskPayload,
-  buildUpdateTaskPayload,
-  getEarliestDueDate,
   getNextStatusActionLabel,
   getNextTaskStatus,
-  getProjectDateBoundary,
-  getTodayKualaLumpur,
-  isDateBeforeToday,
-  TaskFormValues,
 } from '@/lib/tasks';
-
-export interface MilestoneOption {
-  id: string;
-  name: string;
-}
+import TaskFormDialog from './task-form-dialog';
 
 interface ProjectTasksSectionProps {
   projectId: string;
@@ -81,19 +69,11 @@ export default function ProjectTasksSection({
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState<number>(0);
 
-  // Modal state (Create or Edit)
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [formValues, setFormValues] = useState<TaskFormValues>({
-    title: '',
-    description: '',
-    dueDate: '',
-    priority: 'MEDIUM',
-    assigneeId: '',
-    milestoneId: '',
-  });
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState<boolean>(false);
+  // Create/Edit dialog and delete confirmation state.
+  const [modalState, setModalState] = useState<{ task: Task | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [updatingStatusTaskId, setUpdatingStatusTaskId] = useState<string | null>(null);
 
   const assignableMembers = members.filter(
@@ -133,118 +113,57 @@ export default function ProjectTasksSection({
   }, [projectId, statusFilter, reloadTick]);
 
   const openCreateModal = () => {
-    setEditingTask(null);
-    setFormError(null);
-    setFormValues({
-      title: '',
-      description: '',
-      dueDate: '',
-      priority: 'MEDIUM',
-      assigneeId: assignableMembers[0]?.userId ?? '',
-      milestoneId: '',
-    });
-    setIsModalOpen(true);
+    if (assignableMembers.length === 0) return;
+    setModalState({ task: null });
   };
 
   const openEditModal = (task: Task) => {
     if (task.status === 'COMPLETED') return;
-    setEditingTask(task);
-    setFormError(null);
-    setFormValues({
-      title: task.title,
-      description: task.description ?? '',
-      dueDate: task.dueDate,
-      priority: task.priority,
-      assigneeId: task.assigneeId,
-      milestoneId: task.milestoneId ?? '',
-    });
-    setIsModalOpen(true);
+    setModalState({ task });
   };
 
   const closeModal = () => {
-    if (submitting) return;
-    setIsModalOpen(false);
-    setEditingTask(null);
-    setFormError(null);
+    setModalState(null);
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isProjectOwnerPM || submitting) return;
-
-    setFormError(null);
-    const trimmedTitle = formValues.title.trim();
-
-    if (!trimmedTitle) {
-      setFormError('Title is required.');
-      return;
-    }
-    if (trimmedTitle.length > 200) {
-      setFormError('Title must be 200 characters or fewer.');
-      return;
-    }
-    if (formValues.description.trim().length > 2000) {
-      setFormError('Description must be 2000 characters or fewer.');
-      return;
-    }
-    if (!formValues.dueDate) {
-      setFormError('Enter a valid due date.');
-      return;
-    }
-    if (!formValues.assigneeId) {
-      setFormError('Select an assignee from the project team.');
-      return;
-    }
-
-    const dueDateChanged = !editingTask || formValues.dueDate !== editingTask.dueDate;
-    if (dueDateChanged) {
-      if (isDateBeforeToday(formValues.dueDate)) {
-        setFormError('Due date cannot be in the past.');
-        return;
-      }
-      const boundary = getProjectDateBoundary(
-        formValues.dueDate,
-        projectStartDate,
-        projectEndDate,
-      );
-      if (boundary === 'BEFORE_START') {
-        setFormError('Due date cannot be before the project start date.');
-        return;
-      }
-      if (boundary === 'AFTER_END') {
-        setFormError('Due date cannot be after the project end date.');
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    setFeedbackMessage(null);
+  const handleSaved = (message: string) => {
+    setFeedbackMessage(message);
     setActionError(null);
+    setModalState(null);
+    triggerReload();
+    onTasksChanged?.();
+  };
+
+  const openDeleteModal = (task: Task) => {
+    if (task.status === 'COMPLETED') return;
+    setDeleteError(null);
+    setDeleteTarget(task);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
 
     try {
-      if (!editingTask) {
-        const payload: CreateTaskInput = buildCreateTaskPayload(formValues);
-        const res = await createTask(projectId, payload);
-        setFeedbackMessage(res.message);
-      } else {
-        const diff = buildUpdateTaskPayload(editingTask, formValues);
-        if (Object.keys(diff).length === 0) {
-          setIsModalOpen(false);
-          setEditingTask(null);
-          return;
-        }
-        const res = await updateTask(editingTask.id, diff);
-        setFeedbackMessage(res.message);
-      }
-
-      setIsModalOpen(false);
-      setEditingTask(null);
+      const res = await deleteTask(deleteTarget.id);
+      setFeedbackMessage(res.message);
+      setDeleteTarget(null);
+      setActionError(null);
       triggerReload();
       onTasksChanged?.();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Unable to save task.');
+      setDeleteError(
+        err instanceof Error ? err.message : 'Unable to delete task.',
+      );
     } finally {
-      setSubmitting(false);
+      setDeleting(false);
     }
   };
 
@@ -268,8 +187,6 @@ export default function ProjectTasksSection({
     }
   };
 
-  const today = getTodayKualaLumpur();
-  const earliestDueDate = getEarliestDueDate(today, projectStartDate);
   const milestoneMap = new Map(milestones.map((m) => [m.id, m.name]));
 
   return (
@@ -396,7 +313,12 @@ export default function ProjectTasksSection({
                   >
                     <td className="px-3 py-3.5 align-top max-w-xs">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-900">{task.title}</span>
+                        <Link
+                          href={`/projects/${projectId}/tasks/${task.id}`}
+                          className="text-sm font-semibold text-slate-900 hover:underline"
+                        >
+                          {task.title}
+                        </Link>
                         {task.isOverdue && (
                           <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-red-100 text-red-700">
                             Overdue
@@ -465,20 +387,42 @@ export default function ProjectTasksSection({
                         )}
 
                         {isProjectOwnerPM && (
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(task)}
-                            disabled={!canEditTask}
-                            title={
-                              task.status === 'COMPLETED'
-                                ? 'Completed tasks cannot be edited.'
-                                : undefined
-                            }
-                            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Edit
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(task)}
+                              disabled={!canEditTask}
+                              title={
+                                task.status === 'COMPLETED'
+                                  ? 'Completed tasks cannot be edited.'
+                                  : undefined
+                              }
+                              className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openDeleteModal(task)}
+                              disabled={task.status === 'COMPLETED'}
+                              title={
+                                task.status === 'COMPLETED'
+                                  ? 'Completed tasks cannot be deleted.'
+                                  : undefined
+                              }
+                              className="px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-700 hover:bg-red-50 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Delete
+                            </button>
+                          </>
                         )}
+
+                        <Link
+                          href={`/projects/${projectId}/tasks/${task.id}`}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium transition"
+                        >
+                          View
+                        </Link>
 
                         {!canAdvanceStatus && !isProjectOwnerPM && (
                           <span className="text-xs text-slate-400">View only</span>
@@ -493,172 +437,67 @@ export default function ProjectTasksSection({
         </div>
       )}
 
-      {/* Create / Edit Task Modal (PM only) */}
-      {isModalOpen && isProjectOwnerPM && (
+      {modalState && isProjectOwnerPM && (
+        <TaskFormDialog
+          projectId={projectId}
+          projectOwnerId={projectOwnerId}
+          projectStartDate={projectStartDate}
+          projectEndDate={projectEndDate}
+          members={members}
+          milestones={milestones}
+          editingTask={modalState.task}
+          onClose={closeModal}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {deleteTarget && isProjectOwnerPM && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="task-modal-title"
+          aria-labelledby="delete-task-title"
         >
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 id="task-modal-title" className="text-lg font-semibold text-slate-900">
-                {editingTask ? 'Edit Task' : 'Create New Task'}
-              </h3>
-              <button
-                type="button"
-                aria-label="Close task dialog"
-                onClick={closeModal}
-                disabled={submitting}
-                className="text-slate-400 hover:text-slate-600 text-sm font-mono"
-              >
-                ✕
-              </button>
-            </div>
-
-            {formError && (
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <h3
+              id="delete-task-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              Delete Task
+            </h3>
+            <p className="mt-3 text-sm text-slate-600">
+              Delete{' '}
+              <span className="font-semibold text-slate-900">
+                {deleteTarget.title}
+              </span>
+              ? This action cannot be undone.
+            </p>
+            {deleteError && (
               <div
-                className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-xs text-red-800"
+                className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50 text-xs text-red-800"
                 role="alert"
               >
-                {formError}
+                {deleteError}
               </div>
             )}
-
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">
-                  Title <span className="text-red-600">*</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={200}
-                  required
-                  value={formValues.title}
-                  onChange={(e) => setFormValues((v) => ({ ...v, title: e.target.value }))}
-                  placeholder="e.g. Pour foundation slab"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows={3}
-                  maxLength={2000}
-                  value={formValues.description}
-                  onChange={(e) => setFormValues((v) => ({ ...v, description: e.target.value }))}
-                  placeholder="Optional scope or technical notes"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">
-                    Due Date <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    min={!editingTask ? earliestDueDate : undefined}
-                    max={!editingTask ? projectEndDate : undefined}
-                    value={formValues.dueDate}
-                    onChange={(e) => setFormValues((v) => ({ ...v, dueDate: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">
-                    Priority <span className="text-red-600">*</span>
-                  </label>
-                  <select
-                    value={formValues.priority}
-                    onChange={(e) =>
-                      setFormValues((v) => ({ ...v, priority: e.target.value as TaskPriority }))
-                    }
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
-                  >
-                    {TASK_PRIORITY_ORDER.map((priority) => (
-                      <option key={priority} value={priority}>
-                        {TASK_PRIORITY_LABELS[priority]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">
-                  Assignee <span className="text-red-600">*</span>
-                </label>
-                <select
-                  required
-                  value={formValues.assigneeId}
-                  onChange={(e) => setFormValues((v) => ({ ...v, assigneeId: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
-                >
-                  <option value="">-- Select Project Member --</option>
-                  {!assignableMembers.some((m) => m.userId === formValues.assigneeId) &&
-                    formValues.assigneeId && (
-                      <option value={formValues.assigneeId} disabled>
-                        Former member
-                      </option>
-                    )}
-                  {assignableMembers.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.name} ({m.projectRole})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {milestones.length > 0 && (
-                <div>
-                  <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">
-                    Milestone (Optional)
-                  </label>
-                  <select
-                    value={formValues.milestoneId}
-                    onChange={(e) => setFormValues((v) => ({ ...v, milestoneId: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
-                  >
-                    <option value="">No milestone</option>
-                    {milestones.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={submitting}
-                  className="px-4 py-2 text-xs rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 text-xs rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-semibold transition disabled:opacity-50"
-                >
-                  {submitting
-                    ? 'Saving…'
-                    : editingTask
-                      ? 'Save Changes'
-                      : 'Create Task'}
-                </button>
-              </div>
-            </form>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={deleting}
+                className="px-4 py-2 text-xs rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+                className="px-4 py-2 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold transition disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete Task'}
+              </button>
+            </div>
           </div>
         </div>
       )}

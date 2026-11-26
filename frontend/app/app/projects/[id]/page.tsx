@@ -182,12 +182,22 @@ export default function ProjectDetailsPage({
           <h1 className="text-3xl font-light text-slate-900 mt-2">{project.name}</h1>
           <p className="text-sm font-mono text-slate-500 mt-1">{project.description}</p>
         </div>
-        <Link
-          href={isProjectManager ? '/projects' : '/dashboard'}
-          className="text-sm font-mono text-slate-600 hover:underline"
-        >
-          &larr; {isProjectManager ? 'Back to Projects' : 'Back to Dashboard'}
-        </Link>
+        <div className="flex items-center gap-4">
+          {canManageMembers && (
+            <Link
+              href={`/projects/${project.id}/edit`}
+              className="px-4 py-2 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white text-xs font-semibold transition"
+            >
+              Edit Project
+            </Link>
+          )}
+          <Link
+            href={isProjectManager ? '/projects' : '/dashboard'}
+            className="text-sm font-mono text-slate-600 hover:underline"
+          >
+            &larr; {isProjectManager ? 'Back to Projects' : 'Back to Dashboard'}
+          </Link>
+        </div>
       </div>
 
       {notification && (

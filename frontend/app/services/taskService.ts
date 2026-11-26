@@ -36,6 +36,24 @@ export async function createTask(
   );
 }
 
+/** `GET /tasks/:taskId` (§7.6) */
+export async function fetchTask(taskId: string): Promise<Task> {
+  const res = await apiRequest<ApiReadResponse<Task>>(
+    `/tasks/${encodeURIComponent(taskId)}`,
+  );
+  return res.data;
+}
+
+/** `DELETE /tasks/:taskId` (§7.7) */
+export async function deleteTask(
+  taskId: string,
+): Promise<ApiMutationResponse<{ id: string }>> {
+  return apiRequest<ApiMutationResponse<{ id: string }>>(
+    `/tasks/${encodeURIComponent(taskId)}`,
+    { method: 'DELETE' },
+  );
+}
+
 /** `PATCH /tasks/:taskId` (§7.3) */
 export async function updateTask(
   taskId: string,
