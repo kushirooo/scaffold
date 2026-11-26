@@ -21,8 +21,10 @@ import {
 import {
   buildCreateTaskPayload,
   buildUpdateTaskPayload,
+  getEarliestDueDate,
   getNextStatusActionLabel,
   getNextTaskStatus,
+  getProjectDateBoundary,
   getTodayKualaLumpur,
   isDateBeforeToday,
   TaskFormValues,
@@ -36,6 +38,10 @@ export interface MilestoneOption {
 interface ProjectTasksSectionProps {
   projectId: string;
   projectOwnerId: string;
+  /** Project start date, `YYYY-MM-DD`. */
+  projectStartDate: string;
+  /** Project end date, `YYYY-MM-DD`. */
+  projectEndDate: string;
   isProjectOwnerPM: boolean;
   currentUserId?: string;
   members: ProjectMember[];
@@ -59,6 +65,8 @@ function priorityBadgeClass(priority: TaskPriority): string {
 export default function ProjectTasksSection({
   projectId,
   projectOwnerId,
+  projectStartDate,
+  projectEndDate,
   isProjectOwnerPM,
   currentUserId,
   members,
@@ -189,9 +197,24 @@ export default function ProjectTasksSection({
     }
 
     const dueDateChanged = !editingTask || formValues.dueDate !== editingTask.dueDate;
-    if (dueDateChanged && isDateBeforeToday(formValues.dueDate)) {
-      setFormError('Due date cannot be in the past.');
-      return;
+    if (dueDateChanged) {
+      if (isDateBeforeToday(formValues.dueDate)) {
+        setFormError('Due date cannot be in the past.');
+        return;
+      }
+      const boundary = getProjectDateBoundary(
+        formValues.dueDate,
+        projectStartDate,
+        projectEndDate,
+      );
+      if (boundary === 'BEFORE_START') {
+        setFormError('Due date cannot be before the project start date.');
+        return;
+      }
+      if (boundary === 'AFTER_END') {
+        setFormError('Due date cannot be after the project end date.');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -246,6 +269,7 @@ export default function ProjectTasksSection({
   };
 
   const today = getTodayKualaLumpur();
+  const earliestDueDate = getEarliestDueDate(today, projectStartDate);
   const milestoneMap = new Map(milestones.map((m) => [m.id, m.name]));
 
   return (
@@ -540,7 +564,8 @@ export default function ProjectTasksSection({
                   <input
                     type="date"
                     required
-                    min={!editingTask ? today : undefined}
+                    min={!editingTask ? earliestDueDate : undefined}
+                    max={!editingTask ? projectEndDate : undefined}
                     value={formValues.dueDate}
                     onChange={(e) => setFormValues((v) => ({ ...v, dueDate: e.target.value }))}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"

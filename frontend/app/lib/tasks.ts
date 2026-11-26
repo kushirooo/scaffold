@@ -32,6 +32,27 @@ export function isDateBeforeToday(
   return dateStr < getTodayKualaLumpur(now);
 }
 
+/** The later of today and the project start date. */
+export function getEarliestDueDate(
+  today: string,
+  projectStart: string,
+): string {
+  return projectStart > today ? projectStart : today;
+}
+
+export type ProjectDateBoundary = 'BEFORE_START' | 'AFTER_END' | null;
+
+/** A task due date must sit inside the project dates; boundaries are inclusive. */
+export function getProjectDateBoundary(
+  dueDate: string,
+  projectStart: string,
+  projectEnd: string,
+): ProjectDateBoundary {
+  if (dueDate < projectStart) return 'BEFORE_START';
+  if (dueDate > projectEnd) return 'AFTER_END';
+  return null;
+}
+
 /**
  * One step forward only: PENDING -> IN_PROGRESS -> COMPLETED (§3.1, §7.4).
  */

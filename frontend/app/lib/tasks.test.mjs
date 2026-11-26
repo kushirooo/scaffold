@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   buildCreateTaskPayload,
   buildUpdateTaskPayload,
+  getEarliestDueDate,
   getNextTaskStatus,
+  getProjectDateBoundary,
   getTodayKualaLumpur,
   isDateBeforeToday,
 } from './tasks.ts';
@@ -116,6 +118,26 @@ test('getNextTaskStatus advances PENDING -> IN_PROGRESS -> COMPLETED -> null', (
   assert.equal(getNextTaskStatus('PENDING'), 'IN_PROGRESS');
   assert.equal(getNextTaskStatus('IN_PROGRESS'), 'COMPLETED');
   assert.equal(getNextTaskStatus('COMPLETED'), null);
+});
+
+test('getEarliestDueDate uses the later of today and the project start', () => {
+  assert.equal(getEarliestDueDate('2026-11-26', '2026-11-01'), '2026-11-26');
+  assert.equal(getEarliestDueDate('2026-11-26', '2026-12-01'), '2026-12-01');
+  assert.equal(getEarliestDueDate('2026-11-26', '2026-11-26'), '2026-11-26');
+});
+
+test('getProjectDateBoundary accepts the project boundaries and rejects outside', () => {
+  assert.equal(getProjectDateBoundary('2026-11-01', '2026-11-01', '2026-12-31'), null);
+  assert.equal(getProjectDateBoundary('2026-12-31', '2026-11-01', '2026-12-31'), null);
+  assert.equal(getProjectDateBoundary('2026-11-15', '2026-11-01', '2026-12-31'), null);
+  assert.equal(
+    getProjectDateBoundary('2026-10-31', '2026-11-01', '2026-12-31'),
+    'BEFORE_START',
+  );
+  assert.equal(
+    getProjectDateBoundary('2027-01-01', '2026-11-01', '2026-12-31'),
+    'AFTER_END',
+  );
 });
 
 test('getTodayKualaLumpur converts UTC boundaries at 16:00Z accurately', () => {
