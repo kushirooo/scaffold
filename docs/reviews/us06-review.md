@@ -72,3 +72,23 @@ Verified:
 - New file lint/type: `oxlint test/milestones.e2e-spec.ts` → 0/0; `tsc --noEmit -p tsconfig.json` reports no error in it (the 3 errors it reports are pre-existing, in untouched `src/accounts/welcome-email.service.spec.ts` and `test/auth.e2e-spec.ts`).
 
 Residual for C4b (not a C4a finding): plan §11.2 still needs the permission/CSRF/cookie/counts/soft-delete/US05 cross-check rows.
+
+## C4b — E2E permissions, counts, soft delete, cross-check (task-8) — 2026-11-27 — PASS
+
+Scope: `git diff 92bc33c -- backend/app/test/milestones.e2e-spec.ts` is +378/−0 (additions only); no C4a assertion modified; `git status` shows only this file. Suite is now 15 tests (9 + 6).
+
+Findings: none. Two info notes below.
+
+Verified:
+- Suite run twice: `npx vitest run --config ./vitest.config.e2e.ts test/milestones.e2e-spec.ts` → 15/15 both runs. Second run proves the new direct-created `us06-other-pm` user and direct-created project are cleaned (beforeAll/afterAll prefixes), no duplicate-key or leftover failure.
+- Permissions exact: worker/Admin/Viewer POST and PATCH → 403 `FORBIDDEN_ROLE`; non-member worker GET → 404 `NOT_FOUND`; seed PM PATCH on another PM's milestone → 404 `NOT_FOUND` (second PM + project created directly, matching the plan's fixture note).
+- Archived project: `DELETE /projects/:id` then POST/PATCH/GET → 404 `NOT_FOUND`.
+- Guards: POST/PATCH without `X-MARS-CSRF` → 403 `CSRF_MISSING`; GET without cookie → 401 `UNAUTHENTICATED`.
+- Counts exact via `toContainEqual(objectContaining(...))`: 3/1/33 `isCompleted:false`; 2/2/100 with `isCompleted:true` and `isOverdue:false` after moving the target date into the past; 2/0/0 with `isOverdue:true`; 0/0/0 not complete after deleting both tasks. Deleting one of three tasks changes the total 3→2, so a missing `deletedAt: null` filter fails the test.
+- Completed delete: second delete attempt on a completed task → 409 `TASK_COMPLETED` with `A completed task cannot be deleted.`
+- US05 cross-check compares real numbers from a different code path: `milestoneProgress` from `PATCH /tasks/:id/status` `toMatchObject` against values fetched from `GET /projects/:id/milestones` (id, percent, completed, total, isCompleted). Not a tautology — separate services.
+- No `.skip`, `.todo`, `.only` anywhere in `test/`; no duplicate test names; no source/test-support edit. `oxlint` on the file → 0/0; `tsc --noEmit -p tsconfig.json` has no error in it (3 pre-existing errors in untouched files).
+
+Info notes (no action required):
+1. The after-delete half of the cross-check asserts the US05 side as constants (2/2/100) without re-fetching the list; equality after deletion is not asserted literally. Both sides' `deletedAt` filtering is covered separately (US05 side by that assertion, list side by the soft-delete case), so no behavioural gap. A 4-line re-fetch would make §11.2's "including after delete" literal.
+2. The e2e 33% (1/3) cannot distinguish `floor` from rounding; floor is proven by the C1 unit case 199/200→99, and plan §11.2 only requires 33 here.
