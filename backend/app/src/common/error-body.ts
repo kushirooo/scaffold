@@ -14,6 +14,7 @@ export interface ErrorBody {
 const MESSAGE_CODES: ReadonlyMap<string, string> = new Map([
   ['Missing or invalid CSRF header', 'CSRF_MISSING'],
   ['Enter a valid due date.', 'INVALID_DUE_DATE'],
+  ['Enter a valid target date.', 'INVALID_TARGET_DATE'],
   ['Select a valid priority.', 'INVALID_PRIORITY'],
   ['Select a valid status.', 'INVALID_STATUS'],
   [
