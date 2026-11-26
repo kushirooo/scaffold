@@ -9,6 +9,7 @@ import {
   markNotificationRead,
 } from '@/services/projectService';
 import { ApiError } from '@/lib/api';
+import { projectDetailPath } from '@/lib/projects';
 import { useSession } from '@/components/session-provider';
 import type { Project, ProjectNotification } from '@/types/project';
 
@@ -143,21 +144,28 @@ export default function DashboardPage() {
                 {projects.map((project) => {
                   const assignment = project.members.find((member) => member.userId === user.id);
                   return (
-                    <article key={project.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-900">{project.name}</h3>
-                          <p className="mt-1 text-sm text-slate-600">{project.description}</p>
+                    <Link
+                      key={project.id}
+                      href={projectDetailPath(project.id)}
+                      className="block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-brand-navy/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy"
+                    >
+                      <article>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-lg font-semibold text-slate-900">{project.name}</h3>
+                            <p className="mt-1 text-sm text-slate-600">{project.description}</p>
+                          </div>
+                          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">
+                            {project.status}
+                          </span>
                         </div>
-                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">
-                          {project.status}
-                        </span>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
-                        <span>Role: <strong className="text-slate-700">{assignment?.projectRole ?? 'Member'}</strong></span>
-                        <span>Due: <strong className="text-slate-700">{project.endDate ?? 'Not set'}</strong></span>
-                      </div>
-                    </article>
+                        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                          <span>Role: <strong className="text-slate-700">{assignment?.projectRole ?? 'Member'}</strong></span>
+                          <span>Due: <strong className="text-slate-700">{project.endDate ?? 'Not set'}</strong></span>
+                        </div>
+                        <span className="mt-3 inline-block text-xs font-medium text-brand-navy">View project →</span>
+                      </article>
+                    </Link>
                   );
                 })}
               </div>

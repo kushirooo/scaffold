@@ -12,6 +12,11 @@ export const RESTORE_WINDOW_DAYS = 30;
 
 const RESTORE_WINDOW_MS = RESTORE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
+/** Dashboard card target for a project, so the id is always path-safe. */
+export function projectDetailPath(projectId: string): string {
+  return `/projects/${encodeURIComponent(projectId)}`;
+}
+
 const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
