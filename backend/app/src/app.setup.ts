@@ -2,6 +2,7 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { ApiEnvelopeFilter } from './common/filters/api-envelope.filter.js';
 
 /**
  * Shared HTTP setup for the real server and the e2e suite, so tests exercise
@@ -24,6 +25,10 @@ export function configureApp(
       transform: true,
     }),
   );
+
+  // Add `statusCode`, `error` and `code` to every error. The Sprint 2
+  // controllers add `ApiSingleMessageFilter` on top to return one message.
+  app.useGlobalFilters(new ApiEnvelopeFilter());
 
   const origins = config.getOrThrow<string[]>('CORS_ORIGINS');
 

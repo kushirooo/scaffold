@@ -14,6 +14,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PrismaService } from './prisma/prisma.service.js';
 import { ProjectsModule } from './projects/projects.module.js';
+import { TasksModule } from './tasks/tasks.module.js';
 import { UserManagementModule } from './users/user-management.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule({
@@ -39,6 +40,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
     AccountsModule,
     UserManagementModule,
     ProjectsModule,
+    TasksModule,
     HealthModule,
     NotificationsModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error

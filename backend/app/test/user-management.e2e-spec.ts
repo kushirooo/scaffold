@@ -416,7 +416,7 @@ describe('US02 user management (e2e)', () => {
       .set('Cookie', adminCookie)
       .set(CSRF)
       .expect(502);
-    expect(failed.body).toEqual({
+    expect(failed.body).toMatchObject({
       code: 'WELCOME_EMAIL_FAILED',
       message:
         'The welcome email could not be sent. The previous activation link is no longer valid; retry the resend.',

@@ -132,9 +132,12 @@ Admin only; CSRF required. `204 No Content`, no body.
   — **delete policy:** `project.owner` has `onDelete: Cascade`, so deleting an owner would
   silently destroy their projects. Deletion refuses while the user owns **any** project,
   archived ones included, using one conditional statement
-  (`user.deleteMany({ where: { id, ownedProjects: { none: {} } } })`), so a project created
+  (`user.deleteMany({ where: { id, ownedProjects: { none: {} }, assignedTasks: { none: {} }, createdTasks: { none: {} } } })`), so a project created
   concurrently cannot slip past a separate count. Reassign or remove the projects first; a
   subsequent delete of the project-free user returns `204`.
+- `409 { "code": "USER_HAS_TASKS", "message": "This user has tasks. Reassign or remove them before deleting the account." }`
+  — task `assignee`/`creator` use `onDelete: Restrict` (US05). Deletion also refuses while
+  the user has any assigned or created task. Reassign or remove those tasks first.
 - `404 { "code": "USER_NOT_FOUND", "message": "User not found." }` as above.
 
 ## 3. Welcome-email seam (US18 AC1/AC3)

@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ProjectManagerGuard from '@/components/project-manager-guard';
 import { ProjectStatus } from '@/types/project';
 import { fetchProject, updateProject } from '@/services/projectService';
 import { toProjectApiError, type ProjectApiError } from '@/lib/projects';
 
-export default function EditProjectPage({
+function EditProjectPageContent({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -44,7 +45,7 @@ export default function EditProjectPage({
         setDescription(current.description);
         setStartDate(current.startDate);
         setEndDate(current.endDate);
-        setBudget(String(current.budget));
+        setBudget(String(current.budget ?? ''));
         setStatus(current.status);
       } catch (err) {
         console.error(err);
@@ -217,5 +218,17 @@ export default function EditProjectPage({
         </div>
       </form>
     </div>
+  );
+}
+
+export default function EditProjectPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <ProjectManagerGuard>
+      <EditProjectPageContent params={params} />
+    </ProjectManagerGuard>
   );
 }
