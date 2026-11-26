@@ -83,6 +83,33 @@ export class MilestonesService {
     return this.toResponse(milestone, NO_TASKS, this.today());
   }
 
+  async list(
+    user: AuthenticatedUser,
+    projectId: string,
+  ): Promise<MilestoneResponse[]> {
+    await this.projectAccess.requireProjectMember(user, projectId);
+
+    const today = this.today();
+    const milestones = await this.prisma.milestone.findMany({
+      where: { projectId },
+      select: MILESTONE_SELECT,
+      orderBy: [{ targetDate: 'asc' }, { name: 'asc' }],
+    });
+
+    // One grouped task query for the whole list, never one query per milestone.
+    const counts = await this.taskCounts(
+      milestones.map((milestone) => milestone.id),
+    );
+
+    return milestones.map((milestone) =>
+      this.toResponse(
+        milestone,
+        counts.get(milestone.id) ?? NO_TASKS,
+        today,
+      ),
+    );
+  }
+
   async update(
     user: AuthenticatedUser,
     milestoneId: string,

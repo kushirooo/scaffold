@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
@@ -30,6 +31,15 @@ export class MilestonesController {
   ) {
     const data = await this.milestones.create(user, projectId, input);
     return { message: 'Milestone created successfully.', data };
+  }
+
+  @Get('projects/:projectId/milestones')
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('projectId', ParseUuidPipe) projectId: string,
+  ) {
+    const data = await this.milestones.list(user, projectId);
+    return { data };
   }
 
   @Patch('milestones/:milestoneId')
