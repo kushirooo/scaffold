@@ -3,11 +3,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ProjectManagerGuard from '@/components/project-manager-guard';
 import { ProjectStatus } from '@/types/project';
 import { createProject } from '@/services/projectService';
 import { toProjectApiError, type ProjectApiError } from '@/lib/projects';
 
-export default function CreateProjectPage() {
+function CreateProjectPageContent() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -160,5 +161,13 @@ export default function CreateProjectPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function CreateProjectPage() {
+  return (
+    <ProjectManagerGuard>
+      <CreateProjectPageContent />
+    </ProjectManagerGuard>
   );
 }

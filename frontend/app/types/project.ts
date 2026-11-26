@@ -24,7 +24,7 @@ export interface ProjectMember {
   projectRole: ProjectRole;
 }
 
-// GET /projects/page list
+// GET /projects/page list (worker `/projects/assigned` response omits `budget`)
 export interface Project {
   id: string;
   ownerId: string;
@@ -32,7 +32,7 @@ export interface Project {
   description: string;
   startDate: string;
   endDate: string;
-  budget: number;
+  budget?: number;
   status: ProjectStatus;
   isArchived: boolean;
   archivedAt: string | null;

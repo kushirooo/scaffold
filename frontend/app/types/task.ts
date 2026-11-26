@@ -1,6 +1,6 @@
 /**
  * UI types and enum labels for US05 – Task & Deadline Management
- * Mirrors docs/Sprint2_API_Contract.md §§ 2, 7, 12.1.
+ * Mirrors Sprint2_API_Contract.md §§ 2, 7, 12.1.
  */
 
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';

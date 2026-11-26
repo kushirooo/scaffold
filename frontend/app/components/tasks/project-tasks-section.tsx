@@ -35,6 +35,7 @@ export interface MilestoneOption {
 
 interface ProjectTasksSectionProps {
   projectId: string;
+  projectOwnerId: string;
   isProjectOwnerPM: boolean;
   currentUserId?: string;
   members: ProjectMember[];
@@ -57,6 +58,7 @@ function priorityBadgeClass(priority: TaskPriority): string {
 
 export default function ProjectTasksSection({
   projectId,
+  projectOwnerId,
   isProjectOwnerPM,
   currentUserId,
   members,
@@ -86,9 +88,9 @@ export default function ProjectTasksSection({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [updatingStatusTaskId, setUpdatingStatusTaskId] = useState<string | null>(null);
 
-  // Assignable workers in this project (exclude owner PM if present in members list)
-  const workerMembers = members.filter((m) => m.projectRole !== 'Owner');
-  const selectableMembers = workerMembers.length > 0 ? workerMembers : members;
+  const assignableMembers = members.filter(
+    (member) => member.userId !== projectOwnerId,
+  );
 
   const triggerReload = useCallback(() => {
     setLoading(true);
@@ -130,7 +132,7 @@ export default function ProjectTasksSection({
       description: '',
       dueDate: '',
       priority: 'MEDIUM',
-      assigneeId: selectableMembers[0]?.userId ?? '',
+      assigneeId: assignableMembers[0]?.userId ?? '',
       milestoneId: '',
     });
     setIsModalOpen(true);
@@ -279,9 +281,9 @@ export default function ProjectTasksSection({
             <button
               type="button"
               onClick={openCreateModal}
-              disabled={selectableMembers.length === 0}
+              disabled={assignableMembers.length === 0}
               title={
-                selectableMembers.length === 0
+                assignableMembers.length === 0
                   ? 'Assign at least one worker to this project before creating tasks.'
                   : undefined
               }
@@ -293,12 +295,12 @@ export default function ProjectTasksSection({
         </div>
       </div>
 
-      {isProjectOwnerPM && selectableMembers.length === 0 && (
+      {isProjectOwnerPM && assignableMembers.length === 0 && (
         <div
           className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800"
           role="note"
         >
-          Add at least one worker to the project team above before assigning tasks.
+          Add a worker to the project team above before assigning tasks.
         </div>
       )}
 
@@ -482,6 +484,7 @@ export default function ProjectTasksSection({
               </h3>
               <button
                 type="button"
+                aria-label="Close task dialog"
                 onClick={closeModal}
                 disabled={submitting}
                 className="text-slate-400 hover:text-slate-600 text-sm font-mono"
@@ -575,7 +578,13 @@ export default function ProjectTasksSection({
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900"
                 >
                   <option value="">-- Select Project Member --</option>
-                  {selectableMembers.map((m) => (
+                  {!assignableMembers.some((m) => m.userId === formValues.assigneeId) &&
+                    formValues.assigneeId && (
+                      <option value={formValues.assigneeId} disabled>
+                        Former member
+                      </option>
+                    )}
+                  {assignableMembers.map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {m.name} ({m.projectRole})
                     </option>

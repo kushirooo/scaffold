@@ -1,4 +1,4 @@
-import {
+import type {
   CreateTaskInput,
   Task,
   TaskPriority,
@@ -7,15 +7,16 @@ import {
 } from '@/types/task';
 
 /**
- * Current calendar date (YYYY-MM-DD) in Asia/Kuala_Lumpur, matching APP_TIMEZONE (§1.1).
+ * Current calendar date (YYYY-MM-DD) in NEXT_PUBLIC_APP_TIMEZONE (default Asia/Kuala_Lumpur).
  */
-export function getTodayKualaLumpur(): string {
+export function getTodayKualaLumpur(now: Date = new Date()): string {
+  const timeZone = process.env.NEXT_PUBLIC_APP_TIMEZONE ?? 'Asia/Kuala_Lumpur';
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kuala_Lumpur',
+    timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(new Date());
+  }).formatToParts(now);
 
   const year = parts.find((p) => p.type === 'year')?.value ?? '1970';
   const month = parts.find((p) => p.type === 'month')?.value ?? '01';
@@ -23,9 +24,12 @@ export function getTodayKualaLumpur(): string {
   return `${year}-${month}-${day}`;
 }
 
-export function isDateBeforeToday(dateStr: string): boolean {
+export function isDateBeforeToday(
+  dateStr: string,
+  now: Date = new Date(),
+): boolean {
   if (!dateStr) return false;
-  return dateStr < getTodayKualaLumpur();
+  return dateStr < getTodayKualaLumpur(now);
 }
 
 /**

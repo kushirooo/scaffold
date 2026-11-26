@@ -170,6 +170,8 @@ export default function ProjectDetailsPage({
     );
   }
 
+  const showBudgetCard = isProjectManager && project.budget !== undefined;
+
   return (
     <div className="p-8 max-w-6xl mx-auto font-sans min-h-screen bg-canvas">
       <div className="mb-6 flex justify-between items-center">
@@ -200,7 +202,7 @@ export default function ProjectDetailsPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className={`grid grid-cols-1 ${showBudgetCard ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-8`}>
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <p className="text-xs font-mono text-slate-400 uppercase">Start Date</p>
           <p className="text-lg font-semibold text-slate-800 mt-1">{project.startDate || 'N/A'}</p>
@@ -209,10 +211,12 @@ export default function ProjectDetailsPage({
           <p className="text-xs font-mono text-slate-400 uppercase">End Date</p>
           <p className="text-lg font-semibold text-slate-800 mt-1">{project.endDate || 'N/A'}</p>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200">
-          <p className="text-xs font-mono text-slate-400 uppercase">Budget</p>
-          <p className="text-lg font-semibold text-slate-800 mt-1">{formatCurrency(project.budget)}</p>
-        </div>
+        {showBudgetCard && project.budget !== undefined && (
+          <div className="bg-white p-5 rounded-xl border border-slate-200">
+            <p className="text-xs font-mono text-slate-400 uppercase">Budget</p>
+            <p className="text-lg font-semibold text-slate-800 mt-1">{formatCurrency(project.budget)}</p>
+          </div>
+        )}
       </div>
 
       {isProjectManager && (
@@ -325,6 +329,7 @@ export default function ProjectDetailsPage({
       {/* US05 – Project Tasks (PM creates/edits; PM & Workers view; Assignee advances status) */}
       <ProjectTasksSection
         projectId={project.id}
+        projectOwnerId={project.ownerId}
         isProjectOwnerPM={canManageMembers}
         currentUserId={userId}
         members={project.members ?? []}
