@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { Project, ProjectAssignableUser, ProjectRole } from '@/types/project';
 import {
   fetchProject,
+  fetchAssignedProjects,
   fetchAssignableWorkers,
   assignProjectMember,
   removeProjectMember,
 } from '@/services/projectService';
 import { formatCurrency } from '@/lib/projects';
 import { useSession } from '@/components/session-provider';
+import ProjectTasksSection from '@/components/tasks/project-tasks-section';
 
 export default function ProjectDetailsPage({
   params,
@@ -31,11 +33,9 @@ export default function ProjectDetailsPage({
 
   const { user } = useSession();
   const userId = user?.id;
-  // Project manager + owner  -> view and edit
-  // Project manager, not owner -> view only
-  // Anyone else               -> no access
-  // (The backend must enforce this too - hiding things in the UI is not security.)
   const isProjectManager = user?.role === 'PROJECT_MANAGER';
+  const isWorker = user?.role === 'WORKER';
+  const canAccessProjectPage = isProjectManager || isWorker;
   const canManageMembers = Boolean(
     isProjectManager && userId && project && project.ownerId === userId,
   );
@@ -47,24 +47,35 @@ export default function ProjectDetailsPage({
   }, [params]);
 
   useEffect(() => {
-    if (!projectId) return;
-    if (!isProjectManager) return;
+    if (!projectId || !canAccessProjectPage) return;
     let cancelled = false;
 
     const load = async () => {
       try {
-        const current = await fetchProject(projectId);
-        if (cancelled) return;
-        setErrorMessage(null);
-        setProject(current);
-        // Only the owner can assign people, so only they need the worker list.
-        if (current.ownerId !== userId) return;
-        try {
-          const users = await fetchAssignableWorkers();
-          if (!cancelled) setAvailableUsers(users);
-        } catch (err) {
-          if (!cancelled) {
-            setMemberError(err instanceof Error ? err.message : 'Unable to load active workers.');
+        if (isProjectManager) {
+          const current = await fetchProject(projectId);
+          if (cancelled) return;
+          setErrorMessage(null);
+          setProject(current);
+          if (current.ownerId !== userId) return;
+          try {
+            const users = await fetchAssignableWorkers();
+            if (!cancelled) setAvailableUsers(users);
+          } catch (err) {
+            if (!cancelled) {
+              setMemberError(err instanceof Error ? err.message : 'Unable to load active workers.');
+            }
+          }
+        } else if (isWorker) {
+          const assigned = await fetchAssignedProjects();
+          if (cancelled) return;
+          const match = assigned.find((p) => p.id === projectId) ?? null;
+          if (!match) {
+            setErrorMessage('You do not have access to this project.');
+            setProject(null);
+          } else {
+            setErrorMessage(null);
+            setProject(match);
           }
         }
       } catch (err) {
@@ -81,7 +92,7 @@ export default function ProjectDetailsPage({
     return () => {
       cancelled = true;
     };
-  }, [projectId, userId, isProjectManager]);
+  }, [projectId, userId, isProjectManager, isWorker, canAccessProjectPage]);
 
   const handleAssignMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,15 +118,15 @@ export default function ProjectDetailsPage({
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
+  const handleRemoveMember = async (memberUserId: string) => {
     if (!canManageMembers || !project || removingMemberId) return;
     setMemberError(null);
     setNotification(null);
-    setRemovingMemberId(userId);
+    setRemovingMemberId(memberUserId);
     try {
-      await removeProjectMember(project.id, userId);
+      await removeProjectMember(project.id, memberUserId);
       setProject((current) => current
-        ? { ...current, members: current.members.filter((member) => member.userId !== userId) }
+        ? { ...current, members: current.members.filter((member) => member.userId !== memberUserId) }
         : current);
       setNotification('Worker removed from this project. Their other project assignments are unchanged.');
     } catch (err) {
@@ -127,10 +138,10 @@ export default function ProjectDetailsPage({
   };
 
   const unassignedUsers = availableUsers.filter(
-    (user) => !project?.members.some((member) => member.userId === user.id),
+    (u) => !project?.members.some((member) => member.userId === u.id),
   );
 
-  if (!isProjectManager) {
+  if (!canAccessProjectPage) {
     return (
       <div className="p-8 text-center text-slate-500">
         <p role="alert">You do not have access to this project.</p>
@@ -149,12 +160,17 @@ export default function ProjectDetailsPage({
     return (
       <div className="p-8 text-center text-slate-500">
         <p role={errorMessage ? 'alert' : undefined}>{errorMessage ?? 'Project not found.'}</p>
-        <Link href="/projects" className="text-brand-navy underline mt-2 inline-block">
-          Back to Projects
+        <Link
+          href={isProjectManager ? '/projects' : '/dashboard'}
+          className="text-brand-navy underline mt-2 inline-block"
+        >
+          {isProjectManager ? 'Back to Projects' : 'Back to Dashboard'}
         </Link>
       </div>
     );
   }
+
+  const showBudgetCard = isProjectManager && project.budget !== undefined;
 
   return (
     <div className="p-8 max-w-6xl mx-auto font-sans min-h-screen bg-canvas">
@@ -166,8 +182,11 @@ export default function ProjectDetailsPage({
           <h1 className="text-3xl font-light text-slate-900 mt-2">{project.name}</h1>
           <p className="text-sm font-mono text-slate-500 mt-1">{project.description}</p>
         </div>
-        <Link href="/projects" className="text-sm font-mono text-slate-600 hover:underline">
-          &larr; Back to Projects
+        <Link
+          href={isProjectManager ? '/projects' : '/dashboard'}
+          className="text-sm font-mono text-slate-600 hover:underline"
+        >
+          &larr; {isProjectManager ? 'Back to Projects' : 'Back to Dashboard'}
         </Link>
       </div>
 
@@ -177,13 +196,13 @@ export default function ProjectDetailsPage({
         </div>
       )}
 
-      {!canManageMembers && (
+      {isProjectManager && !canManageMembers && (
         <div className="mb-6 p-4 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm" role="note">
           This project is read-only for you. Only the project owner can change its team.
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className={`grid grid-cols-1 ${showBudgetCard ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 mb-8`}>
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <p className="text-xs font-mono text-slate-400 uppercase">Start Date</p>
           <p className="text-lg font-semibold text-slate-800 mt-1">{project.startDate || 'N/A'}</p>
@@ -192,116 +211,129 @@ export default function ProjectDetailsPage({
           <p className="text-xs font-mono text-slate-400 uppercase">End Date</p>
           <p className="text-lg font-semibold text-slate-800 mt-1">{project.endDate || 'N/A'}</p>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200">
-          <p className="text-xs font-mono text-slate-400 uppercase">Budget</p>
-          <p className="text-lg font-semibold text-slate-800 mt-1">{formatCurrency(project.budget)}</p>
-        </div>
-      </div>
-
-      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900 mb-4">Project Team Members</h2>
-
-        {canManageMembers && (
-          <form onSubmit={handleAssignMember} className="flex flex-wrap gap-4 items-end mb-4 p-4 bg-slate-50 rounded-xl">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Select User</label>
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
-                required
-              >
-                <option value="">-- Choose User --</option>
-                {unassignedUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.systemRole})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="w-48">
-              <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Assign Role</label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as ProjectRole)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
-              >
-                <option value="Owner">Owner</option>
-                <option value="Member">Member</option>
-                <option value="Contributor">Contributor</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isAssigning || !selectedUserId}
-              className="px-5 py-2 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
-            >
-              {isAssigning ? 'Assigning…' : 'Assign to Project'}
-            </button>
-          </form>
-        )}
-
-        {memberError && (
-          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
-            {memberError}
-          </p>
-        )}
-
-        {canManageMembers && availableUsers.length === 0 && !memberError && (
-          <p className="mb-4 text-sm text-slate-500">No active workers are available to assign.</p>
-        )}
-
-        {project.members.length === 0 ? (
-          <p className="text-sm text-slate-500 italic py-4">No team members assigned to this project yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-slate-200 text-xs font-mono uppercase text-slate-500">
-                  <th className="px-3 py-3 font-medium">Worker</th>
-                  <th className="px-3 py-3 font-medium">Email</th>
-                  <th className="px-3 py-3 font-medium">Project Role</th>
-                  {canManageMembers && <th className="px-3 py-3 text-right font-medium">Action</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {project.members.map((member) => {
-                  const isProjectOwner = member.userId === project.ownerId;
-                  return (
-                    <tr key={member.userId}>
-                      <td className="px-3 py-3 text-sm font-semibold text-slate-800">{member.name}</td>
-                      <td className="px-3 py-3 text-sm text-slate-500">{member.email}</td>
-                      <td className="px-3 py-3">
-                        <span className="text-xs font-mono px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md">
-                          {member.projectRole}
-                        </span>
-                      </td>
-                      {canManageMembers && (
-                        <td className="px-3 py-3 text-right">
-                          {isProjectOwner ? (
-                            <span className="text-xs text-slate-400">Project owner</span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => void handleRemoveMember(member.userId)}
-                              disabled={removingMemberId !== null}
-                              className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                            >
-                              {removingMemberId === member.userId ? 'Removing…' : 'Remove'}
-                            </button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {showBudgetCard && project.budget !== undefined && (
+          <div className="bg-white p-5 rounded-xl border border-slate-200">
+            <p className="text-xs font-mono text-slate-400 uppercase">Budget</p>
+            <p className="text-lg font-semibold text-slate-800 mt-1">{formatCurrency(project.budget)}</p>
           </div>
         )}
       </div>
+
+      {isProjectManager && (
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Project Team Members</h2>
+
+          {canManageMembers && (
+            <form onSubmit={handleAssignMember} className="flex flex-wrap gap-4 items-end mb-4 p-4 bg-slate-50 rounded-xl">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Select User</label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
+                  required
+                >
+                  <option value="">-- Choose User --</option>
+                  {unassignedUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.systemRole})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="w-48">
+                <label className="block text-xs font-mono font-semibold uppercase text-slate-700 mb-1">Assign Role</label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value as ProjectRole)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm"
+                >
+                  <option value="Owner">Owner</option>
+                  <option value="Member">Member</option>
+                  <option value="Contributor">Contributor</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAssigning || !selectedUserId}
+                className="px-5 py-2 rounded-lg bg-brand-navy hover:bg-brand-navy-raised text-white font-medium text-sm transition disabled:opacity-60"
+              >
+                {isAssigning ? 'Assigning…' : 'Assign to Project'}
+              </button>
+            </form>
+          )}
+
+          {memberError && (
+            <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+              {memberError}
+            </p>
+          )}
+
+          {canManageMembers && availableUsers.length === 0 && !memberError && (
+            <p className="mb-4 text-sm text-slate-500">No active workers are available to assign.</p>
+          )}
+
+          {project.members.length === 0 ? (
+            <p className="text-sm text-slate-500 italic py-4">No team members assigned to this project yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs font-mono uppercase text-slate-500">
+                    <th className="px-3 py-3 font-medium">Worker</th>
+                    <th className="px-3 py-3 font-medium">Email</th>
+                    <th className="px-3 py-3 font-medium">Project Role</th>
+                    {canManageMembers && <th className="px-3 py-3 text-right font-medium">Action</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {project.members.map((member) => {
+                    const isProjectOwner = member.userId === project.ownerId;
+                    return (
+                      <tr key={member.userId}>
+                        <td className="px-3 py-3 text-sm font-semibold text-slate-800">{member.name}</td>
+                        <td className="px-3 py-3 text-sm text-slate-500">{member.email}</td>
+                        <td className="px-3 py-3">
+                          <span className="text-xs font-mono px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md">
+                            {member.projectRole}
+                          </span>
+                        </td>
+                        {canManageMembers && (
+                          <td className="px-3 py-3 text-right">
+                            {isProjectOwner ? (
+                              <span className="text-xs text-slate-400">Project owner</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveMember(member.userId)}
+                                disabled={removingMemberId !== null}
+                                className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                              >
+                                {removingMemberId === member.userId ? 'Removing…' : 'Remove'}
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* US05 – Project Tasks (PM creates/edits; PM & Workers view; Assignee advances status) */}
+      <ProjectTasksSection
+        projectId={project.id}
+        projectOwnerId={project.ownerId}
+        isProjectOwnerPM={canManageMembers}
+        currentUserId={userId}
+        members={project.members ?? []}
+      />
     </div>
   );
 }
