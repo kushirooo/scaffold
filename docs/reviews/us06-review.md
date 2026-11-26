@@ -37,3 +37,21 @@ Rubric: no token/password/cookie value in a response or log; auth/CSRF guards un
 Checks run by reviewer: `tsc --noEmit -p tsconfig.build.json` → clean; `oxlint` on changed files → 0/0; `vitest run src/common/error-body.spec.ts src/milestones/milestone.rules.spec.ts` → 11/11 pass.
 
 Residual risk (not a finding): DTO/service paths have no unit test at C2; behaviour is proven by C4 e2e per plan §11.2.
+
+## C3 — List endpoint with progress (task-4) — 2026-11-27 — PASS
+
+Scope: `git diff` since C2 (`3a1dc26`) touches only `milestones.service.ts` and `milestones.controller.ts`; `git diff --name-only` confirms no other file. Diff is purely the list route + service method.
+
+Findings: none.
+
+Verified:
+- `requireProjectMember` runs first (`milestones.service.ts:91`): Admin/Viewer 403 `FORBIDDEN_ROLE`, non-member worker / other PM / archived project 404 `NOT_FOUND` (the load filters `isArchived: false` and checks owner-or-member row). No milestone query runs before the access check.
+- Sort `orderBy: [{ targetDate: 'asc' }, { name: 'asc' }]` (`95`) matches contract §8.3; same shape as US05 (`tasks.service.ts:141`).
+- Exactly one `taskCounts` call for the whole list (`99-101`); that helper is a single `groupBy` with `deletedAt: null` (`154-188`), and returns before querying when the list is empty. No per-milestone query; no `findMany` include of tasks.
+- `today()` computed once (`94`) and reused for every row; empty project returns `[]`; missing counts fall back to `NO_TASKS`.
+- Controller `GET projects/:projectId/milestones` returns `{ data }` (`milestones.controller.ts:36-43`); no `@Query`, no pagination params, no 409, no DELETE.
+- Response mapping reuses `toResponse`, so shapes/envelopes stay identical to C2.
+
+Rubric: read-only route exposes no token/password/cookie value and adds no logging; auth + global CSRF guards unchanged; no new tests were possible/needed here (C4 e2e covers read access, sort, counts, and the deleted-task case); no scope creep; no catalogued error wording changed.
+
+Checks run by reviewer: `tsc --noEmit -p tsconfig.build.json` → clean; `oxlint` on the two files → 0/0; `vitest run src/milestones/milestone.rules.spec.ts src/common/error-body.spec.ts` → 11/11 pass.
