@@ -203,6 +203,7 @@ model Task {
   status      TaskStatus   @default(PENDING)
   milestoneId String?      @map("milestone_id") @db.Uuid
   completedAt DateTime?    @map("completed_at") @db.Timestamptz(6)
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz(6)
   createdBy   String       @map("created_by") @db.Uuid
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -212,7 +213,7 @@ model Task {
   creator   User       @relation("TaskCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
 
-  @@index([projectId])
+  @@index([projectId, deletedAt])
   @@index([assigneeId])
   @@index([dueDate])
   @@index([milestoneId])

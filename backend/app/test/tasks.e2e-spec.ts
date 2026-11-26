@@ -957,4 +957,241 @@ describe('US05 task management (e2e)', () => {
         );
       });
   });
+
+  it('returns a task detail with the project, creator and milestone names', async () => {
+    const projectId = await createProject('detail');
+    await addWorker(projectId);
+    const milestoneId = await createMilestone(projectId, 'Detail milestone');
+    const task = await createTask(projectId, {
+      title: 'Detail task',
+      milestoneId,
+    });
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.data).toMatchObject({
+          id: task.id,
+          projectId,
+          projectName: `${PREFIX}detail`,
+          title: 'Detail task',
+          milestoneId,
+          milestoneName: 'Detail milestone',
+          createdBy: pmId,
+        });
+        expect(body.data.createdByName).toEqual(expect.any(String));
+        expect(body.data.dueDate).toBe(addDays(TODAY, 2));
+      });
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${task.id}`)
+      .set('Cookie', workerCookie)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.data.id).toBe(task.id);
+      });
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${task.id}`)
+      .set('Cookie', adminCookie)
+      .expect(403)
+      .expect(({ body }) => {
+        expect(body.code).toBe('FORBIDDEN_ROLE');
+      });
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${task.id}`)
+      .set('Cookie', viewerCookie)
+      .expect(403)
+      .expect(({ body }) => {
+        expect(body.code).toBe('FORBIDDEN_ROLE');
+      });
+  });
+
+  it('hides a task detail from a former member and an archived project', async () => {
+    const formerProjectId = await createProject('detail-former');
+    await addWorker(formerProjectId);
+    const formerTask = await createTask(formerProjectId);
+    await prisma.projectMember.delete({
+      where: {
+        projectId_userId: {
+          projectId: formerProjectId,
+          userId: workerId,
+        },
+      },
+    });
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${formerTask.id}`)
+      .set('Cookie', workerCookie)
+      .expect(404);
+
+    const archivedProjectId = await createProject('detail-archived');
+    await addWorker(archivedProjectId);
+    const archivedTask = await createTask(archivedProjectId);
+
+    await request(app.getHttpServer())
+      .delete(`/projects/${archivedProjectId}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${archivedTask.id}`)
+      .set('Cookie', pmCookie)
+      .expect(404);
+  });
+
+  it('soft deletes a PENDING task and hides it from every task route', async () => {
+    const projectId = await createProject('delete-pending');
+    await addWorker(projectId);
+    const task = await createTask(projectId);
+
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.message).toBe('Task deleted successfully.');
+        expect(body.data).toEqual({ id: task.id });
+      });
+
+    const list = await getTasks(projectId, pmCookie).expect(200);
+    expect(list.body.data).toEqual([]);
+
+    await request(app.getHttpServer())
+      .get(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ title: 'Changed' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(`/tasks/${task.id}/status`)
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .send({ status: 'IN_PROGRESS' })
+      .expect(404);
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .expect(404);
+
+    expect(
+      await prisma.task.count({
+        where: { id: task.id, deletedAt: { not: null } },
+      }),
+    ).toBe(1);
+  });
+
+  it('allows deleting an IN_PROGRESS task and recalculates milestone progress', async () => {
+    const projectId = await createProject('delete-progress');
+    await addWorker(projectId);
+    const milestoneId = await createMilestone(
+      projectId,
+      'Delete milestone',
+    );
+    const first = await createTask(projectId, {
+      title: 'First task',
+      milestoneId,
+    });
+    const second = await createTask(projectId, {
+      title: 'Second task',
+      milestoneId,
+    });
+
+    await patchStatus(first.id, 'IN_PROGRESS', workerCookie).expect(200);
+
+    await request(app.getHttpServer())
+      .delete(`/tasks/${second.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .expect(200);
+
+    await patchStatus(first.id, 'COMPLETED', workerCookie)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.data.milestoneProgress).toMatchObject({
+          completedTasks: 1,
+          totalTasks: 1,
+          completionPercent: 100,
+          isCompleted: true,
+        });
+      });
+  });
+
+  it('refuses to delete a completed task', async () => {
+    const projectId = await createProject('delete-completed');
+    await addWorker(projectId);
+    const task = await createTask(projectId);
+
+    await patchStatus(task.id, 'IN_PROGRESS', workerCookie).expect(200);
+    await patchStatus(task.id, 'COMPLETED', workerCookie).expect(200);
+
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .expect(409)
+      .expect(({ body }) => {
+        expect(body.code).toBe('TASK_COMPLETED');
+        expect(body.message).toBe('A completed task cannot be deleted.');
+      });
+
+    const list = await getTasks(projectId, pmCookie).expect(200);
+    expect(list.body.data).toHaveLength(1);
+  });
+
+  it('allows only the PM owner to delete a task', async () => {
+    const projectId = await createProject('delete-permissions');
+    await addWorker(projectId);
+    const task = await createTask(projectId);
+
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', workerCookie)
+      .set(CSRF)
+      .expect(403);
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', adminCookie)
+      .set(CSRF)
+      .expect(403);
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', viewerCookie)
+      .set(CSRF)
+      .expect(403);
+
+    const list = await getTasks(projectId, pmCookie).expect(200);
+    expect(list.body.data).toHaveLength(1);
+  });
+
+  it('ignores a deleted task when the project dates change', async () => {
+    const projectId = await createProject('delete-project-dates');
+    await addWorker(projectId);
+    const task = await createTask(projectId, {
+      dueDate: addDays(TODAY, 5),
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/tasks/${task.id}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/projects/${projectId}`)
+      .set('Cookie', pmCookie)
+      .set(CSRF)
+      .send({ endDate: addDays(TODAY, 4) })
+      .expect(200);
+  });
 });

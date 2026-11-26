@@ -217,6 +217,7 @@ export class ProjectsService {
       const tasksOutside = await this.prisma.task.count({
         where: {
           projectId: id,
+          deletedAt: null,
           OR: [
             { dueDate: { lt: newStart } },
             { dueDate: { gt: newEnd } },
