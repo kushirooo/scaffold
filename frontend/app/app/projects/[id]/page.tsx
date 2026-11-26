@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Project, ProjectAssignableUser, ProjectRole } from '@/types/project';
+import { Milestone } from '@/types/milestone';
 import {
   fetchProject,
   fetchAssignedProjects,
@@ -10,8 +11,10 @@ import {
   assignProjectMember,
   removeProjectMember,
 } from '@/services/projectService';
+import { fetchProjectMilestones } from '@/services/milestoneService';
 import { formatCurrency } from '@/lib/projects';
 import { useSession } from '@/components/session-provider';
+import ProjectMilestonesSection from '@/components/milestones/project-milestones-section';
 import ProjectTasksSection from '@/components/tasks/project-tasks-section';
 
 export default function ProjectDetailsPage({
@@ -30,6 +33,12 @@ export default function ProjectDetailsPage({
   const [memberError, setMemberError] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+
+  // US06 – Milestones state shared between ProjectMilestonesSection & ProjectTasksSection
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestonesLoading, setMilestonesLoading] = useState<boolean>(true);
+  const [milestonesError, setMilestonesError] = useState<string | null>(null);
+  const [milestonesReloadTick, setMilestonesReloadTick] = useState<number>(0);
 
   const { user } = useSession();
   const userId = user?.id;
@@ -93,6 +102,44 @@ export default function ProjectDetailsPage({
       cancelled = true;
     };
   }, [projectId, userId, isProjectManager, isWorker, canAccessProjectPage]);
+
+  const triggerMilestonesReload = useCallback(() => {
+    setMilestonesLoading(true);
+    setMilestonesError(null);
+    setMilestonesReloadTick((t) => t + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    let cancelled = false;
+
+    fetchProjectMilestones(project.id)
+      .then((list) => {
+        if (!cancelled) {
+          setMilestones(list);
+          setMilestonesError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setMilestonesError(
+            err instanceof Error ? err.message : 'Unable to load project milestones.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMilestonesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [project?.id, milestonesReloadTick]);
+
+  const milestoneOptions = useMemo(
+    () => milestones.map((m) => ({ id: m.id, name: m.name })),
+    [milestones],
+  );
 
   const handleAssignMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -326,6 +373,17 @@ export default function ProjectDetailsPage({
         </div>
       )}
 
+      {/* US06 – Project Milestones (PM creates/edits; PM & Workers view timeline & completion %) */}
+      <ProjectMilestonesSection
+        projectId={project.id}
+        isProjectOwnerPM={canManageMembers}
+        milestones={milestones}
+        loading={milestonesLoading}
+        loadError={milestonesError}
+        onRetry={triggerMilestonesReload}
+        onMilestonesChanged={triggerMilestonesReload}
+      />
+
       {/* US05 – Project Tasks (PM creates/edits; PM & Workers view; Assignee advances status) */}
       <ProjectTasksSection
         projectId={project.id}
@@ -333,6 +391,8 @@ export default function ProjectDetailsPage({
         isProjectOwnerPM={canManageMembers}
         currentUserId={userId}
         members={project.members ?? []}
+        milestones={milestoneOptions}
+        onTasksChanged={triggerMilestonesReload}
       />
     </div>
   );
