@@ -7,6 +7,7 @@ export type ApiTaskPriority = (typeof TASK_PRIORITIES)[number];
 export interface TaskResponse {
   id: string;
   projectId: string;
+  projectName: string;
   title: string;
   description: string | null;
   dueDate: string;
@@ -16,8 +17,10 @@ export interface TaskResponse {
   assigneeIsMember: boolean;
   status: ApiTaskStatus;
   milestoneId: string | null;
+  milestoneName: string | null;
   completedAt: string | null;
   createdBy: string;
+  createdByName: string;
   isOverdue: boolean;
   createdAt: string;
   updatedAt: string;

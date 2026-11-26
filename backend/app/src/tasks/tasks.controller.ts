@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -44,6 +45,24 @@ export class TasksController {
   ) {
     const data = await this.tasks.list(user, projectId, query);
     return { data };
+  }
+
+  @Get('tasks/:taskId')
+  async getOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('taskId', ParseUuidPipe) taskId: string,
+  ) {
+    const data = await this.tasks.getOne(user, taskId);
+    return { data };
+  }
+
+  @Delete('tasks/:taskId')
+  async remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('taskId', ParseUuidPipe) taskId: string,
+  ) {
+    const data = await this.tasks.remove(user, taskId);
+    return { message: 'Task deleted successfully.', data };
   }
 
   @Patch('tasks/:taskId')

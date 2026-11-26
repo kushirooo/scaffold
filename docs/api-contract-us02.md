@@ -197,3 +197,5 @@ unit tests `frontend/app/lib/user-admin.test.mjs`).
   the project UI first; `/users` surfaces the policy but does not link to the project list.
 - Profile pictures and invited-account creation are not exposed anywhere; the UI no longer
   shows an upload control for an endpoint that does not exist.
+- A soft-deleted task still counts as a task for `USER_HAS_TASKS`, because its FK rows remain.
+  A user with only soft-deleted tasks cannot be physically deleted. Deactivate the user instead.

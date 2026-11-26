@@ -100,6 +100,25 @@ describe('US05 task schema invariants (real PostgreSQL)', () => {
     expect(byName.get('tasks_created_by_fkey')).toBe('r');
   });
 
+  it('marks deleted tasks with a nullable deleted_at timestamp', async () => {
+    const columns = await prisma.$queryRaw<
+      Array<{
+        data_type: string;
+        is_nullable: string;
+      }>
+    >`
+      SELECT data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'tasks'
+        AND column_name = 'deleted_at'
+    `;
+
+    expect(columns).toHaveLength(1);
+    expect(columns[0].data_type).toBe('timestamp with time zone');
+    expect(columns[0].is_nullable).toBe('YES');
+  });
+
   it('declares the task and milestone indexes', async () => {
     const rows = await prisma.$queryRaw<Array<{ indexname: string }>>`
       SELECT indexname
@@ -111,7 +130,7 @@ describe('US05 task schema invariants (real PostgreSQL)', () => {
     const names = new Set(rows.map((row) => row.indexname));
 
     for (const index of [
-      'tasks_project_id_idx',
+      'tasks_project_id_deleted_at_idx',
       'tasks_assignee_id_idx',
       'tasks_due_date_idx',
       'tasks_milestone_id_idx',

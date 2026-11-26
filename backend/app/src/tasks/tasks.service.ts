@@ -25,9 +25,12 @@ import type {
 
 const TASK_INCLUDE = {
   assignee: { select: { id: true, fullName: true } },
+  creator: { select: { id: true, fullName: true } },
+  project: { select: { name: true } },
+  milestone: { select: { id: true, name: true } },
 } as const;
 
-type TaskWithAssignee = Prisma.TaskGetPayload<{
+type TaskWithRelations = Prisma.TaskGetPayload<{
   include: typeof TASK_INCLUDE;
 }>;
 
@@ -131,6 +134,7 @@ export class TasksService {
     const tasks = await this.prisma.task.findMany({
       where: {
         projectId,
+        deletedAt: null,
         ...(query.status === undefined ? {} : { status: query.status }),
       },
       include: TASK_INCLUDE,
@@ -142,6 +146,67 @@ export class TasksService {
     );
   }
 
+  async getOne(
+    user: AuthenticatedUser,
+    taskId: string,
+  ): Promise<TaskResponse> {
+    if (user.role !== 'PROJECT_MANAGER' && user.role !== 'WORKER') {
+      forbidden();
+    }
+
+    const existing = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+      include: TASK_INCLUDE,
+    });
+    if (!existing) {
+      notFound();
+    }
+
+    const access = await this.projectAccess.requireProjectMember(
+      user,
+      existing.projectId,
+    );
+
+    return this.toResponse(existing, this.today(), access.memberIds);
+  }
+
+  async remove(
+    user: AuthenticatedUser,
+    taskId: string,
+  ): Promise<{ id: string }> {
+    if (user.role !== 'PROJECT_MANAGER') {
+      forbidden();
+    }
+
+    const existing = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+      select: { id: true, projectId: true, status: true },
+    });
+    if (!existing) {
+      notFound();
+    }
+
+    await this.projectAccess.requireProjectManager(
+      user,
+      existing.projectId,
+    );
+
+    if (existing.status === 'COMPLETED') {
+      throw apiError(
+        HttpStatus.CONFLICT,
+        'TASK_COMPLETED',
+        'A completed task cannot be deleted.',
+      );
+    }
+
+    await this.prisma.task.update({
+      where: { id: taskId },
+      data: { deletedAt: new Date() },
+    });
+
+    return { id: taskId };
+  }
+
   async update(
     user: AuthenticatedUser,
     taskId: string,
@@ -151,8 +216,8 @@ export class TasksService {
       forbidden();
     }
 
-    const existing = await this.prisma.task.findUnique({
-      where: { id: taskId },
+    const existing = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
       include: TASK_INCLUDE,
     });
     if (!existing) {
@@ -273,8 +338,8 @@ export class TasksService {
       forbidden();
     }
 
-    const existing = await this.prisma.task.findUnique({
-      where: { id: taskId },
+    const existing = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
       include: TASK_INCLUDE,
     });
     if (!existing) {
@@ -387,9 +452,11 @@ export class TasksService {
     }
 
     const [totalTasks, completedTasks, milestone] = await Promise.all([
-      this.prisma.task.count({ where: { milestoneId } }),
       this.prisma.task.count({
-        where: { milestoneId, status: 'COMPLETED' },
+        where: { milestoneId, deletedAt: null },
+      }),
+      this.prisma.task.count({
+        where: { milestoneId, status: 'COMPLETED', deletedAt: null },
       }),
       this.prisma.milestone.findUnique({
         where: { id: milestoneId },
@@ -414,7 +481,7 @@ export class TasksService {
   }
 
   private toResponse(
-    task: TaskWithAssignee,
+    task: TaskWithRelations,
     today: string,
     memberIds: Set<string>,
   ): TaskResponse {
@@ -423,6 +490,7 @@ export class TasksService {
     return {
       id: task.id,
       projectId: task.projectId,
+      projectName: task.project.name,
       title: task.title,
       description: task.description,
       dueDate,
@@ -432,10 +500,12 @@ export class TasksService {
       assigneeIsMember: memberIds.has(task.assigneeId),
       status: task.status,
       milestoneId: task.milestoneId,
+      milestoneName: task.milestone?.name ?? null,
       completedAt: task.completedAt
         ? task.completedAt.toISOString()
         : null,
       createdBy: task.createdBy,
+      createdByName: task.creator.fullName,
       isOverdue: isTaskOverdue(dueDate, task.status, today),
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString(),
