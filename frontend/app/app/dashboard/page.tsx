@@ -117,12 +117,20 @@ export default function DashboardPage() {
           <p className="mt-1 text-sm font-mono text-slate-500">Your project workspace</p>
         </div>
         {user.role === 'PROJECT_MANAGER' && (
-          <Link
-            href="/projects"
-            className="rounded-lg bg-brand-navy hover:bg-brand-navy-raised px-5 py-2.5 text-sm font-medium text-white transition"
-          >
-            Manage Projects
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/projects"
+              className="rounded-lg bg-brand-navy hover:bg-brand-navy-raised px-5 py-2.5 text-sm font-medium text-white transition"
+            >
+              Manage Projects
+            </Link>
+            <Link
+              href="/equipment"
+              className="rounded-lg bg-brand-navy hover:bg-brand-navy-raised px-5 py-2.5 text-sm font-medium text-white transition"
+            >
+              Manage Equipment
+            </Link>
+          </div>
         )}
       </header>
 
@@ -252,11 +260,23 @@ export default function DashboardPage() {
             )}
           </section>
         </div>
+        
       ) : user.role === 'PROJECT_MANAGER' ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-8">
-          <h2 className="text-xl font-semibold text-slate-900">Project management</h2>
-          <p className="mt-2 text-sm text-slate-600">Create projects and manage team assignments from your project list.</p>
-        </section>
+        <div className="grid gap-4 md:grid-cols-2">
+          <section className="rounded-2xl border border-slate-200 bg-white p-8">
+            <h2 className="text-xl font-semibold text-slate-900">Project management</h2>
+            <p className="mt-2 text-sm text-slate-600">Create projects and manage team assignments from your project list.</p>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-8" aria-labelledby="equipment-management-heading">
+            <h2 id="equipment-management-heading" className="text-xl font-semibold text-slate-900">
+              Equipment Management
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Manage company equipment, check availability and track equipment assigned to projects.
+            </p>
+          </section>
+        </div>
       ) : (
         <section className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-600">
           No dashboard items.
