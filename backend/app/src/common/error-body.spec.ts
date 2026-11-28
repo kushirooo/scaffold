@@ -39,6 +39,16 @@ describe('buildErrorBody', () => {
     expect(body.code).toBe('INVALID_DUE_DATE');
   });
 
+  it('maps the milestone target date message to INVALID_TARGET_DATE', () => {
+    const body = buildErrorBody(
+      new BadRequestException(['Enter a valid target date.']),
+      { flatten: true },
+    );
+
+    expect(body.message).toBe('Enter a valid target date.');
+    expect(body.code).toBe('INVALID_TARGET_DATE');
+  });
+
   it('keeps an explicit code and message', () => {
     const body = buildErrorBody(
       new HttpException(
