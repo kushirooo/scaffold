@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '@/services/authService';
 import { isAdminRole, roleLabel } from '@/lib/user-admin';
 import type { CurrentUser } from '@/types/auth';
+import NotificationsBell from './notifications-bell';
 
 interface MobileNavbarProps {
   user: CurrentUser;
@@ -115,8 +116,10 @@ export default function MobileNavbar({ user }: MobileNavbarProps) {
             />
           </Link>
 
-          <button
-            ref={menuButtonRef}
+          <div className="flex items-center gap-1">
+            <NotificationsBell />
+            <button
+              ref={menuButtonRef}
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Open menu"
@@ -136,7 +139,8 @@ export default function MobileNavbar({ user }: MobileNavbarProps) {
             >
               <path d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-          </button>
+            </button>
+          </div>
         </div>
       </header>
 

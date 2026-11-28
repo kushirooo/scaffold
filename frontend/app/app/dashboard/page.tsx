@@ -3,10 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchDashboard } from '@/services/dashboardService';
-import {
-  markAllNotificationsRead,
-  markNotificationRead,
-} from '@/services/projectService';
 import { updateTaskStatus } from '@/services/taskService';
 import { ApiError } from '@/lib/api';
 import {
@@ -16,15 +12,12 @@ import {
   sortDashboardProjects,
   sortTeamWorkload,
   sortUpcomingDeadlines,
-  withAllNotificationsRead,
-  withNotificationRead,
   type NextTaskActionStatus,
 } from '@/lib/dashboard';
 import { getTodayKualaLumpur } from '@/lib/tasks';
 import CalendarMonth from '@/components/dashboard/calendar-month';
 import EquipmentUsage from '@/components/dashboard/equipment-usage';
 import MetricStrip from '@/components/dashboard/metric-strip';
-import NotificationsPanel from '@/components/dashboard/notifications-panel';
 import SystemOverview from '@/components/dashboard/system-overview';
 import TeamWorkload from '@/components/dashboard/team-workload';
 import WorkerTaskGroups from '@/components/dashboard/worker-task-groups';
@@ -53,9 +46,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [notificationError, setNotificationError] = useState<string | null>(null);
-  const [markingId, setMarkingId] = useState<string | null>(null);
-  const [markingAll, setMarkingAll] = useState(false);
   const [actingTaskId, setActingTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -113,46 +103,6 @@ export default function DashboardPage() {
       setRefreshing(false);
     }
   }, [refreshing]);
-
-  const handleMarkRead = useCallback(async (id: string) => {
-    if (markingId !== null || markingAll) return;
-    setNotificationError(null);
-    setMarkingId(id);
-    try {
-      await markNotificationRead(id);
-      setDashboard((current) =>
-        current?.notifications
-          ? { ...current, notifications: withNotificationRead(current.notifications, id) }
-          : current,
-      );
-    } catch (error) {
-      setNotificationError(
-        error instanceof ApiError ? error.message : 'Unable to mark this notification as read.',
-      );
-    } finally {
-      setMarkingId(null);
-    }
-  }, [markingId, markingAll]);
-
-  const handleMarkAllRead = useCallback(async () => {
-    if (markingAll || markingId !== null) return;
-    setNotificationError(null);
-    setMarkingAll(true);
-    try {
-      await markAllNotificationsRead();
-      setDashboard((current) =>
-        current?.notifications
-          ? { ...current, notifications: withAllNotificationsRead(current.notifications) }
-          : current,
-      );
-    } catch (error) {
-      setNotificationError(
-        error instanceof ApiError ? error.message : 'Unable to mark all notifications as read.',
-      );
-    } finally {
-      setMarkingAll(false);
-    }
-  }, [markingAll, markingId]);
 
   const handleStatusChange = useCallback(
     async (task: WorkerTaskItem, status: NextTaskActionStatus) => {
@@ -214,7 +164,7 @@ export default function DashboardPage() {
     : isPM
       ? 'Managed projects, equipment, and upcoming deadlines'
       : isWorker
-        ? 'Your tasks and notifications'
+        ? 'Your tasks and calendar'
         : 'No dashboard data for this role';
 
   const metricCards = dashboardMetricCards(user.role, dashboard);
@@ -223,7 +173,6 @@ export default function DashboardPage() {
   const equipmentUsage = dashboard.equipmentUsage;
   const teamWorkload = sortTeamWorkload(dashboard.teamWorkload ?? []);
   const calendar = dashboard.calendar;
-  const notifications = dashboard.notifications ?? { unreadCount: 0, items: [] };
   const systemOverview = dashboard.systemOverview;
   const hasTeamSection = Array.isArray(dashboard.teamWorkload);
 
@@ -234,7 +183,7 @@ export default function DashboardPage() {
       ]
     : isPM
       ? [
-          { label: 'Projects', href: '/projects' },
+          { label: 'Projects', targetId: 'active-projects-section' },
           ...(calendar ? [{ label: 'Calendar', targetId: 'calendar-section' }] : []),
           ...(equipmentUsage ? [{ label: 'Equipment', targetId: 'equipment-section' }] : []),
           ...(hasTeamSection ? [{ label: 'Team', targetId: 'team-section' }] : []),
@@ -310,18 +259,6 @@ export default function DashboardPage() {
                 </ul>
               </div>
             )}
-
-            {(isAdmin || isPM || isWorker) && (
-              <NotificationsPanel
-                compact
-                summary={notifications}
-                markingId={markingId}
-                markingAll={markingAll}
-                error={notificationError}
-                onMarkRead={(id) => void handleMarkRead(id)}
-                onMarkAllRead={() => void handleMarkAllRead()}
-              />
-            )}
           </aside>
         )}
 
@@ -336,15 +273,6 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
-                {isPM && (
-                  <Link
-                    href="/projects/new"
-                    className="rounded-lg bg-brand-navy px-4 py-2 text-xs font-medium text-white transition hover:bg-brand-navy-raised sm:text-sm"
-                  >
-                    + Create New Project
-                  </Link>
-                )}
-
                 {isAdmin && (
                   <Link
                     href="/users"
@@ -352,31 +280,6 @@ export default function DashboardPage() {
                   >
                     Manage Users
                   </Link>
-                )}
-
-                {(isPM || isWorker) && calendar && (
-                  <button
-                    type="button"
-                    onClick={() => scrollToSectionById('calendar-section')}
-                    className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 sm:text-sm"
-                  >
-                    View Calendar
-                  </button>
-                )}
-
-                {isWorker && (
-                  <button
-                    type="button"
-                    onClick={() => scrollToSectionById('notifications-section')}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 sm:text-sm"
-                  >
-                    <span>Check Notifications</span>
-                    {notifications.unreadCount > 0 && (
-                      <span className="rounded-full bg-brand-navy px-2 py-0.5 text-[11px] font-semibold text-white">
-                        {notifications.unreadCount}
-                      </span>
-                    )}
-                  </button>
                 )}
 
                 <button
@@ -421,8 +324,8 @@ export default function DashboardPage() {
 
                 {activeProjects.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-                    You have no active projects yet. Click &quot;+ Create New Project&quot; to get
-                    started.
+                    You have no active projects yet. Use Projects in the navigation bar to
+                    create one.
                   </div>
                 ) : (
                   <div className="space-y-3.5">
