@@ -179,7 +179,6 @@ export default function DashboardPage() {
   const sidebarItems: SidebarItem[] = isAdmin
     ? [
         { label: 'Overview', targetId: 'system-overview-section' },
-        { label: 'Users', href: '/users' },
       ]
     : isPM
       ? [
@@ -273,14 +272,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
-                {isAdmin && (
-                  <Link
-                    href="/users"
-                    className="rounded-lg bg-brand-navy px-4 py-2 text-xs font-medium text-white transition hover:bg-brand-navy-raised sm:text-sm"
-                  >
-                    Manage Users
-                  </Link>
-                )}
+                
 
                 <button
                   type="button"
