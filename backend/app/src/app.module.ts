@@ -9,6 +9,7 @@ import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CsrfGuard } from './auth/guards/csrf.guard.js';
 import { validateEnvironment } from './config/env.validation.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 import { HealthModule } from './health/health.module.js';
 import { MilestonesModule } from './milestones/milestones.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -43,6 +44,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
     ProjectsModule,
     TasksModule,
     MilestonesModule,
+    DashboardModule,
     HealthModule,
     NotificationsModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
