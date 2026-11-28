@@ -8,6 +8,7 @@ import { logout } from '@/services/authService';
 import { isAdminRole, roleLabel } from '@/lib/user-admin';
 import type { CurrentUser } from '@/types/auth';
 import MobileNavbar from './mobile-navbar';
+import NotificationsBell from './notifications-bell';
 import { initials } from './users/user-management-dashboard';
 
 interface NavbarProps {
@@ -90,6 +91,7 @@ export default function Navbar({ user }: NavbarProps) {
           </div>
 
           <div className="flex items-center gap-4">
+            <NotificationsBell />
             {user ? (
               <div className="flex items-center gap-3 rounded-xl  bg-white px-3 py-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8eef7] text-[11px] font-bold text-[#18365f]">
