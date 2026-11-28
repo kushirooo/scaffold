@@ -1,97 +1,75 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchDashboard } from '@/services/dashboardService';
 import {
-  fetchProjectNotifications,
   markAllNotificationsRead,
   markNotificationRead,
 } from '@/services/projectService';
+import { updateTaskStatus } from '@/services/taskService';
 import { ApiError } from '@/lib/api';
 import {
-  computeDashboardMetrics,
+  dashboardMetricCards,
   getDashboardProjectHref,
-  getDashboardTaskHref,
   getDeadlineItemHref,
   sortDashboardProjects,
+  sortTeamWorkload,
   sortUpcomingDeadlines,
+  withAllNotificationsRead,
+  withNotificationRead,
+  type NextTaskActionStatus,
 } from '@/lib/dashboard';
+import { getTodayKualaLumpur } from '@/lib/tasks';
+import CalendarMonth from '@/components/dashboard/calendar-month';
+import EquipmentUsage from '@/components/dashboard/equipment-usage';
+import MetricStrip from '@/components/dashboard/metric-strip';
+import NotificationsPanel from '@/components/dashboard/notifications-panel';
+import SystemOverview from '@/components/dashboard/system-overview';
+import TeamWorkload from '@/components/dashboard/team-workload';
+import WorkerTaskGroups from '@/components/dashboard/worker-task-groups';
+import { HealthBadge } from '@/components/dashboard/badges';
 import { useSession } from '@/components/session-provider';
-import {
-  HEALTH_STATUS_LABELS,
-  type DashboardData,
-  type HealthStatus,
-} from '@/types/dashboard';
-import type { ProjectNotification } from '@/types/project';
+import type { DashboardData, WorkerTaskItem } from '@/types/dashboard';
 
-function healthBadgeClass(status: HealthStatus): string {
-  if (status === 'RED') return 'bg-red-100 text-red-800 border-red-200';
-  if (status === 'YELLOW') return 'bg-amber-100 text-amber-800 border-amber-200';
-  return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-}
-
-function healthDotClass(status: HealthStatus): string {
-  if (status === 'RED') return 'bg-red-600';
-  if (status === 'YELLOW') return 'bg-amber-500';
-  return 'bg-emerald-600';
-}
-
-function HealthBadge({ status }: { status: HealthStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-mono font-medium ${healthBadgeClass(status)}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`h-1.5 w-1.5 rounded-full ${healthDotClass(status)}`}
-      />
-      {HEALTH_STATUS_LABELS[status]}
-    </span>
-  );
-}
-
-function priorityBadgeClass(priority: string): string {
-  if (priority === 'URGENT') return 'bg-red-100 text-red-800';
-  if (priority === 'HIGH') return 'bg-amber-100 text-amber-800';
-  if (priority === 'MEDIUM') return 'bg-blue-100 text-blue-800';
-  return 'bg-slate-100 text-slate-700';
-}
+type SidebarItem = { label: string; href?: string; targetId?: string };
 
 function scrollToSectionById(sectionId: string): void {
   if (typeof document === 'undefined') return;
   document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function EmptyPanel({ text }: { text: string }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <p className="text-sm text-slate-500">{text}</p>
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useSession();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [notifications, setNotifications] = useState<ProjectNotification[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
-  const [markingAll, setMarkingAll] = useState<boolean>(false);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [actingTaskId, setActingTaskId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // US16 AC: Dashboard refreshes automatically on load
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
 
     const loadInitial = async () => {
       try {
-        const dashPromise = fetchDashboard();
-        const notifPromise =
-          user.role === 'WORKER'
-            ? fetchProjectNotifications().catch(() => [] as ProjectNotification[])
-            : Promise.resolve([] as ProjectNotification[]);
-
-        const [dashData, userNotifications] = await Promise.all([dashPromise, notifPromise]);
-        if (cancelled) return;
-        setDashboard(dashData);
-        setNotifications(userNotifications);
-        setErrorMessage(null);
+        const data = await fetchDashboard();
+        if (!cancelled) {
+          setDashboard(data);
+          setErrorMessage(null);
+        }
       } catch (error) {
         if (!cancelled) {
           setErrorMessage(
@@ -109,62 +87,43 @@ export default function DashboardPage() {
     };
   }, [user]);
 
+  const handleRetry = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const data = await fetchDashboard();
+      setDashboard(data);
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : 'Unable to load your dashboard.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleManualRefresh = useCallback(async () => {
-    if (!user || refreshing) return;
+    if (refreshing) return;
     setRefreshing(true);
     setErrorMessage(null);
     try {
-      const dashPromise = fetchDashboard();
-      const notifPromise =
-        user.role === 'WORKER'
-          ? fetchProjectNotifications().catch(() => [] as ProjectNotification[])
-          : Promise.resolve([] as ProjectNotification[]);
-
-      const [dashData, userNotifications] = await Promise.all([dashPromise, notifPromise]);
-      setDashboard(dashData);
-      setNotifications(userNotifications);
+      const data = await fetchDashboard();
+      setDashboard(data);
     } catch (error) {
-      setErrorMessage(
-        error instanceof ApiError ? error.message : 'Unable to load your dashboard.',
-      );
+      setErrorMessage(error instanceof ApiError ? error.message : 'Unable to load your dashboard.');
     } finally {
       setRefreshing(false);
-      setLoading(false);
     }
-  }, [user, refreshing]);
+  }, [refreshing]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => n.readAt === null).length,
-    [notifications],
-  );
-
-  const metrics = useMemo(
-    () => computeDashboardMetrics(dashboard ?? {}),
-    [dashboard],
-  );
-
-  const activeProjects = useMemo(
-    () => sortDashboardProjects(dashboard?.activeProjects ?? []),
-    [dashboard?.activeProjects],
-  );
-
-  const myTasks = dashboard?.myTasks ?? [];
-  const hasMyTasksSection = Array.isArray(dashboard?.myTasks);
-
-  const upcomingDeadlines = useMemo(
-    () => sortUpcomingDeadlines(dashboard?.upcomingDeadlines ?? []),
-    [dashboard?.upcomingDeadlines],
-  );
-  const hasUpcomingDeadlinesSection = Array.isArray(dashboard?.upcomingDeadlines);
-
-  const handleMarkRead = async (id: string) => {
+  const handleMarkRead = useCallback(async (id: string) => {
     if (markingId !== null || markingAll) return;
     setNotificationError(null);
     setMarkingId(id);
     try {
-      const updated = await markNotificationRead(id);
-      setNotifications((current) =>
-        current.map((n) => (n.id === updated.id ? updated : n)),
+      await markNotificationRead(id);
+      setDashboard((current) =>
+        current?.notifications
+          ? { ...current, notifications: withNotificationRead(current.notifications, id) }
+          : current,
       );
     } catch (error) {
       setNotificationError(
@@ -173,15 +132,19 @@ export default function DashboardPage() {
     } finally {
       setMarkingId(null);
     }
-  };
+  }, [markingId, markingAll]);
 
-  const handleMarkAllRead = async () => {
+  const handleMarkAllRead = useCallback(async () => {
     if (markingAll || markingId !== null) return;
     setNotificationError(null);
     setMarkingAll(true);
     try {
       await markAllNotificationsRead();
-      setNotifications(await fetchProjectNotifications());
+      setDashboard((current) =>
+        current?.notifications
+          ? { ...current, notifications: withAllNotificationsRead(current.notifications) }
+          : current,
+      );
     } catch (error) {
       setNotificationError(
         error instanceof ApiError ? error.message : 'Unable to mark all notifications as read.',
@@ -189,7 +152,28 @@ export default function DashboardPage() {
     } finally {
       setMarkingAll(false);
     }
-  };
+  }, [markingAll, markingId]);
+
+  const handleStatusChange = useCallback(
+    async (task: WorkerTaskItem, status: NextTaskActionStatus) => {
+      setActingTaskId(task.id);
+      setActionError(null);
+      try {
+        await updateTaskStatus(task.id, { status });
+        const data = await fetchDashboard();
+        setDashboard(data);
+      } catch (error) {
+        setActionError(
+          error instanceof ApiError ? error.message : 'Unable to update the task. Try again.',
+        );
+      } finally {
+        setActingTaskId(null);
+      }
+    },
+    [],
+  );
+
+  if (!user) return null;
 
   if (loading) {
     return (
@@ -207,7 +191,7 @@ export default function DashboardPage() {
           <p className="mt-2 text-sm text-red-800">{errorMessage}</p>
           <button
             type="button"
-            onClick={() => void handleManualRefresh()}
+            onClick={() => void handleRetry()}
             className="mt-4 rounded-lg bg-brand-navy px-4 py-2 text-xs font-medium text-white hover:bg-brand-navy-raised"
           >
             Retry
@@ -217,115 +201,140 @@ export default function DashboardPage() {
     );
   }
 
-  if (!user || !dashboard) return null;
+  if (!dashboard) return null;
 
   const isAdmin = user.role === 'ADMIN';
   const isPM = user.role === 'PROJECT_MANAGER';
   const isWorker = user.role === 'WORKER';
+  const isViewer = user.role === 'VIEWER';
+  const today = getTodayKualaLumpur();
 
   const roleSubtitle = isAdmin
-    ? 'Organization-wide active projects overview'
+    ? 'System-wide overview of users, projects, and work'
     : isPM
-      ? 'Managed projects and upcoming schedule deadlines'
-      : 'Your assigned projects, personal tasks, and deadlines';
+      ? 'Managed projects, equipment, and upcoming deadlines'
+      : isWorker
+        ? 'Your tasks and notifications'
+        : 'No dashboard data for this role';
 
-  const sidebarItems: Array<{ label: string; href?: string; targetId?: string }> = [
-    {
-      label: 'Projects',
-      href: isPM ? '/projects' : undefined,
-      targetId: !isPM ? 'active-projects-section' : undefined,
-    },
-    ...(hasMyTasksSection
-      ? [{ label: 'Tasks', targetId: 'task-summary-section' }]
-      : []),
-    ...(hasUpcomingDeadlinesSection
-      ? [{ label: 'Calendar', targetId: 'upcoming-deadlines-section' }]
-      : []),
-    {
-      label: 'Reports',
-      targetId: 'active-projects-section',
-    },
-    {
-      label: 'Settings',
-      href: isAdmin ? '/users' : undefined,
-      targetId: !isAdmin ? 'dashboard-top-section' : undefined,
-    },
-  ];
+  const metricCards = dashboardMetricCards(user.role, dashboard);
+  const activeProjects = sortDashboardProjects(dashboard.activeProjects ?? []);
+  const upcomingDeadlines = sortUpcomingDeadlines(dashboard.upcomingDeadlines ?? []);
+  const equipmentUsage = dashboard.equipmentUsage;
+  const teamWorkload = sortTeamWorkload(dashboard.teamWorkload ?? []);
+  const calendar = dashboard.calendar;
+  const notifications = dashboard.notifications ?? { unreadCount: 0, items: [] };
+  const systemOverview = dashboard.systemOverview;
+  const hasTeamSection = Array.isArray(dashboard.teamWorkload);
+
+  const sidebarItems: SidebarItem[] = isAdmin
+    ? [
+        { label: 'Overview', targetId: 'system-overview-section' },
+        { label: 'Users', href: '/users' },
+      ]
+    : isPM
+      ? [
+          { label: 'Projects', href: '/projects' },
+          ...(calendar ? [{ label: 'Calendar', targetId: 'calendar-section' }] : []),
+          ...(equipmentUsage ? [{ label: 'Equipment', targetId: 'equipment-section' }] : []),
+          ...(hasTeamSection ? [{ label: 'Team', targetId: 'team-section' }] : []),
+        ]
+      : isWorker
+        ? [
+            { label: 'Pending', targetId: 'worker-pending-section' },
+            { label: 'In Progress', targetId: 'worker-in-progress-section' },
+            { label: 'Completed', targetId: 'worker-completed-section' },
+            ...(calendar ? [{ label: 'Calendar', targetId: 'calendar-section' }] : []),
+          ]
+        : [];
 
   return (
     <main
       id="dashboard-top-section"
       className="mx-auto min-h-screen max-w-7xl bg-canvas p-4 font-sans sm:p-6 md:p-8"
     >
-      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-        {/* Sidebar Navigation (US16 AC: Projects, Tasks, Calendar, Reports, Settings) */}
-        <aside
-          aria-label="Dashboard sections"
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-20 lg:self-start"
-        >
-          <p className="px-3 text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">
-            Workspace
-          </p>
-          <nav className="mt-2 flex flex-wrap gap-1 lg:flex-col">
-            {sidebarItems.map((item) =>
-              item.href ? (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-brand-navy"
-                >
-                  {item.label}
-                </Link>
-              ) : (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => item.targetId && scrollToSectionById(item.targetId)}
-                  className="rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-brand-navy"
-                >
-                  {item.label}
-                </button>
-              ),
-            )}
-          </nav>
-
-          {/* Color-coded Health Legend (D4) */}
-          <div className="mt-6 hidden border-t border-slate-100 pt-4 lg:block">
+      <div
+        className={`grid gap-6 ${
+          sidebarItems.length > 0 ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'grid-cols-1'
+        }`}
+      >
+        {sidebarItems.length > 0 && (
+          <aside
+            aria-label="Dashboard sections"
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto"
+          >
             <p className="px-3 text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">
-              Status Legend
+              Workspace
             </p>
-            <ul className="mt-2.5 space-y-2 px-3 text-xs text-slate-600">
-              <li className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-600" aria-hidden="true" />
-                <span>Urgent (Overdue)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
-                <span>Attention needed (≤3d)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-600" aria-hidden="true" />
-                <span>On track</span>
-              </li>
-            </ul>
-          </div>
-        </aside>
+            <nav className="mt-2 flex flex-wrap gap-1 lg:flex-col">
+              {sidebarItems.map((item) =>
+                item.href ? (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-brand-navy"
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => item.targetId && scrollToSectionById(item.targetId)}
+                    className="rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-brand-navy"
+                  >
+                    {item.label}
+                  </button>
+                ),
+              )}
+            </nav>
 
-        {/* Priority Main Column */}
+            {(isPM || isWorker) && (
+              <div className="mt-6 hidden border-t border-slate-100 pt-4 lg:block">
+                <p className="px-3 text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400">
+                  Status Legend
+                </p>
+                <ul className="mt-2.5 space-y-2 px-3 text-xs text-slate-600">
+                  <li className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-red-600" aria-hidden="true" />
+                    <span>Urgent (Overdue)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+                    <span>Attention needed (≤3d)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-600" aria-hidden="true" />
+                    <span>On track</span>
+                  </li>
+                </ul>
+              </div>
+            )}
+
+            {(isAdmin || isPM || isWorker) && (
+              <NotificationsPanel
+                compact
+                summary={notifications}
+                markingId={markingId}
+                markingAll={markingAll}
+                error={notificationError}
+                onMarkRead={(id) => void handleMarkRead(id)}
+                onMarkAllRead={() => void handleMarkAllRead()}
+              />
+            )}
+          </aside>
+        )}
+
         <div className="min-w-0 space-y-6">
-          {/* Top Greeting + Quick Action Buttons (US16 AC) */}
           <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-2xl font-light text-slate-900 sm:text-3xl">
                   Welcome, {user.fullName}
                 </h1>
-                <p className="mt-1 text-xs font-mono text-slate-500 sm:text-sm">
-                  {roleSubtitle}
-                </p>
+                <p className="mt-1 text-xs font-mono text-slate-500 sm:text-sm">{roleSubtitle}</p>
               </div>
 
-              {/* Quick Action Buttons */}
               <div className="flex flex-wrap items-center gap-2.5">
                 {isPM && (
                   <Link
@@ -336,10 +345,19 @@ export default function DashboardPage() {
                   </Link>
                 )}
 
-                {hasUpcomingDeadlinesSection && (
+                {isAdmin && (
+                  <Link
+                    href="/users"
+                    className="rounded-lg bg-brand-navy px-4 py-2 text-xs font-medium text-white transition hover:bg-brand-navy-raised sm:text-sm"
+                  >
+                    Manage Users
+                  </Link>
+                )}
+
+                {(isPM || isWorker) && calendar && (
                   <button
                     type="button"
-                    onClick={() => scrollToSectionById('upcoming-deadlines-section')}
+                    onClick={() => scrollToSectionById('calendar-section')}
                     className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 sm:text-sm"
                   >
                     View Calendar
@@ -353,9 +371,9 @@ export default function DashboardPage() {
                     className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50 sm:text-sm"
                   >
                     <span>Check Notifications</span>
-                    {unreadCount > 0 && (
+                    {notifications.unreadCount > 0 && (
                       <span className="rounded-full bg-brand-navy px-2 py-0.5 text-[11px] font-semibold text-white">
-                        {unreadCount}
+                        {notifications.unreadCount}
                       </span>
                     )}
                   </button>
@@ -372,191 +390,124 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Key Metrics Strip */}
-            <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
-              <div className="rounded-xl bg-slate-50 p-3.5">
-                <p className="text-[11px] font-mono uppercase text-slate-500">
-                  {isAdmin ? 'All Active Projects' : 'Active Projects'}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {metrics.activeProjectsCount}
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-slate-50 p-3.5">
-                <p className="text-[11px] font-mono uppercase text-slate-500">Task Progress</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {metrics.completedTasks}/{metrics.totalTasks}
-                  <span className="ml-1.5 text-xs font-mono font-normal text-slate-500">
-                    ({metrics.completionPercent}%)
-                  </span>
-                </p>
-              </div>
-
-              {hasMyTasksSection ? (
-                <div className="rounded-xl bg-slate-50 p-3.5">
-                  <p className="text-[11px] font-mono uppercase text-slate-500">My Open Tasks</p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {metrics.myOpenTasksCount}
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-xl bg-slate-50 p-3.5">
-                  <p className="text-[11px] font-mono uppercase text-slate-500">Urgent Projects</p>
-                  <p
-                    className={`mt-1 text-2xl font-semibold ${
-                      metrics.urgentProjectsCount > 0 ? 'text-red-700' : 'text-slate-900'
-                    }`}
-                  >
-                    {metrics.urgentProjectsCount}
-                  </p>
-                </div>
-              )}
-
-              <div className="rounded-xl bg-slate-50 p-3.5">
-                <p className="text-[11px] font-mono uppercase text-slate-500">Overdue Items</p>
-                <p
-                  className={`mt-1 text-2xl font-semibold ${
-                    metrics.overdueItemsCount > 0 ? 'text-red-700' : 'text-emerald-700'
-                  }`}
-                >
-                  {metrics.overdueItemsCount}
-                </p>
-              </div>
-            </div>
+            <MetricStrip cards={metricCards} />
           </header>
 
-          {/* Priority Grid: My Active Projects + Upcoming Deadlines (Role-Scoped §10.1) */}
-          <div
-            className={`grid gap-6 ${
-              hasUpcomingDeadlinesSection
-                ? 'xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]'
-                : 'grid-cols-1'
-            }`}
-          >
-            {/* Widget 1: My Active Projects */}
-            <section
-              id="active-projects-section"
-              aria-labelledby="active-projects-heading"
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <div>
-                  <h2
-                    id="active-projects-heading"
-                    className="text-lg font-semibold text-slate-900"
-                  >
-                    {isAdmin ? 'All Active Projects' : 'My Active Projects'}
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    {isAdmin
-                      ? 'System-wide active projects and health status'
-                      : isPM
-                        ? 'Active projects you manage'
-                        : 'Active projects you are assigned to'}
-                  </p>
+          {isAdmin &&
+            (systemOverview ? (
+              <SystemOverview overview={systemOverview} />
+            ) : (
+              <EmptyPanel text="No dashboard data is available for your role." />
+            ))}
+
+          {isPM && (
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]">
+              <section
+                id="active-projects-section"
+                aria-labelledby="active-projects-heading"
+                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <div>
+                    <h2 id="active-projects-heading" className="text-lg font-semibold text-slate-900">
+                      My Active Projects
+                    </h2>
+                    <p className="text-xs text-slate-500">Active projects you manage</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono font-medium text-slate-700">
+                    {activeProjects.length} active
+                  </span>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono font-medium text-slate-700">
-                  {activeProjects.length} active
-                </span>
-              </div>
 
-              {activeProjects.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-                  {isPM
-                    ? 'You have no active projects yet. Click "+ Create New Project" to get started.'
-                    : 'No active projects to display.'}
-                </div>
-              ) : (
-                <div className="space-y-3.5">
-                  {activeProjects.map((project) => {
-                    const href = getDashboardProjectHref(project.id, user.role);
-                    const pct =
-                      project.totalTasks > 0
-                        ? Math.floor((100 * project.completedTasks) / project.totalTasks)
-                        : 0;
-                    const isRed = project.healthStatus === 'RED';
+                {activeProjects.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                    You have no active projects yet. Click &quot;+ Create New Project&quot; to get
+                    started.
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {activeProjects.map((project) => {
+                      const href = getDashboardProjectHref(project.id, user.role);
+                      const percent =
+                        project.totalTasks > 0
+                          ? Math.floor((100 * project.completedTasks) / project.totalTasks)
+                          : 0;
+                      const isRed = project.healthStatus === 'RED';
 
-                    const cardContent = (
-                      <article
-                        className={`rounded-xl border p-4 transition ${
-                          isRed
-                            ? 'border-red-300 bg-red-50/40'
-                            : 'border-slate-200 bg-white hover:border-brand-navy/40'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <h3 className="text-base font-semibold text-slate-900">
-                            {project.name}
-                          </h3>
-                          <HealthBadge status={project.healthStatus} />
-                        </div>
-
-                        <div className="mt-3">
-                          <div className="mb-1 flex items-center justify-between text-xs font-mono text-slate-600">
-                            <span>
-                              {project.completedTasks} of {project.totalTasks} tasks complete
-                            </span>
-                            <span className="font-semibold">{pct}%</span>
+                      const card = (
+                        <article
+                          className={`rounded-xl border p-4 transition ${
+                            isRed
+                              ? 'border-red-300 bg-red-50/40'
+                              : 'border-slate-200 bg-white hover:border-brand-navy/40'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <h3 className="text-base font-semibold text-slate-900">
+                              {project.name}
+                            </h3>
+                            <HealthBadge status={project.healthStatus} />
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                            <div
-                              className={`h-full transition-all duration-300 ${
-                                project.healthStatus === 'RED'
-                                  ? 'bg-red-600'
-                                  : project.healthStatus === 'YELLOW'
-                                    ? 'bg-amber-500'
-                                    : 'bg-emerald-600'
-                              }`}
-                              style={{ width: `${pct}%` }}
-                            />
+
+                          <div className="mt-3">
+                            <div className="mb-1 flex items-center justify-between text-xs font-mono text-slate-600">
+                              <span>
+                                {project.completedTasks} of {project.totalTasks} tasks complete
+                              </span>
+                              <span className="font-semibold">{percent}%</span>
+                            </div>
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className={`h-full transition-all duration-300 ${
+                                  project.healthStatus === 'RED'
+                                    ? 'bg-red-600'
+                                    : project.healthStatus === 'YELLOW'
+                                      ? 'bg-amber-500'
+                                      : 'bg-emerald-600'
+                                }`}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-xs font-mono text-slate-500">
-                          <div className="flex flex-wrap gap-3">
-                            <span
-                              className={
-                                project.overdueTasks > 0 ? 'font-semibold text-red-700' : ''
-                              }
-                            >
-                              Overdue tasks: {project.overdueTasks}
-                            </span>
-                            <span
-                              className={
-                                project.overdueMilestones > 0 ? 'font-semibold text-red-700' : ''
-                              }
-                            >
-                              Overdue milestones: {project.overdueMilestones}
-                            </span>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-xs font-mono text-slate-500">
+                            <div className="flex flex-wrap gap-3">
+                              <span className={project.overdueTasks > 0 ? 'font-semibold text-red-700' : ''}>
+                                Overdue tasks: {project.overdueTasks}
+                              </span>
+                              <span
+                                className={
+                                  project.overdueMilestones > 0 ? 'font-semibold text-red-700' : ''
+                                }
+                              >
+                                Overdue milestones: {project.overdueMilestones}
+                              </span>
+                            </div>
+                            {href && (
+                              <span className="font-sans font-medium text-brand-navy">
+                                Open project →
+                              </span>
+                            )}
                           </div>
-                          {href && (
-                            <span className="font-sans font-medium text-brand-navy">
-                              Open project →
-                            </span>
-                          )}
-                        </div>
-                      </article>
-                    );
+                        </article>
+                      );
 
-                    return href ? (
-                      <Link
-                        key={project.id}
-                        href={href}
-                        className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy"
-                      >
-                        {cardContent}
-                      </Link>
-                    ) : (
-                      <div key={project.id}>{cardContent}</div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+                      return href ? (
+                        <Link
+                          key={project.id}
+                          href={href}
+                          className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy"
+                        >
+                          {card}
+                        </Link>
+                      ) : (
+                        <div key={project.id}>{card}</div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
 
-            {/* Widget 2: Upcoming Deadlines (PM & Worker only per §10.1) */}
-            {hasUpcomingDeadlinesSection && (
               <section
                 id="upcoming-deadlines-section"
                 aria-labelledby="upcoming-deadlines-heading"
@@ -632,196 +583,27 @@ export default function DashboardPage() {
                   </ul>
                 )}
               </section>
-            )}
-          </div>
-
-          {/* Widget 3: Task Summary / My Open Tasks (Worker only per §10.1) */}
-          {hasMyTasksSection && (
-            <section
-              id="task-summary-section"
-              aria-labelledby="task-summary-heading"
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 id="task-summary-heading" className="text-lg font-semibold text-slate-900">
-                    Task Summary
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Your open assigned tasks across active projects (select a task to update status)
-                  </p>
-                </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono font-medium text-slate-700">
-                  {myTasks.length} open
-                </span>
-              </div>
-
-              {myTasks.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-                  You have no open tasks assigned right now.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs font-mono uppercase text-slate-500">
-                        <th className="px-3 py-2.5 font-medium">Task</th>
-                        <th className="px-3 py-2.5 font-medium">Project</th>
-                        <th className="px-3 py-2.5 font-medium">Priority</th>
-                        <th className="px-3 py-2.5 font-medium">Due Date</th>
-                        <th className="px-3 py-2.5 font-medium">Status</th>
-                        <th className="px-3 py-2.5 text-right font-medium">Health</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {myTasks.map((task) => (
-                        <tr
-                          key={task.id}
-                          className={task.isOverdue ? 'bg-red-50/50' : 'hover:bg-slate-50/70'}
-                        >
-                          <td className="px-3 py-3 font-medium text-slate-900">
-                            <Link
-                              href={getDashboardTaskHref(task)}
-                              className="text-brand-navy hover:underline"
-                            >
-                              {task.title}
-                            </Link>
-                          </td>
-                          <td className="px-3 py-3 text-slate-600">{task.projectName}</td>
-                          <td className="px-3 py-3">
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-mono font-medium ${priorityBadgeClass(task.priority)}`}
-                            >
-                              {task.priority}
-                            </span>
-                          </td>
-                          <td
-                            className={`px-3 py-3 font-mono text-xs ${
-                              task.isOverdue ? 'font-bold text-red-700' : 'text-slate-700'
-                            }`}
-                          >
-                            {task.dueDate}
-                            {task.isOverdue && (
-                              <span className="ml-1.5 rounded bg-red-100 px-1.5 py-0.5 text-[10px] uppercase text-red-800">
-                                Overdue
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-700">
-                              {task.status === 'IN_PROGRESS' ? 'In Progress' : 'Pending'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <HealthBadge status={task.healthStatus} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+            </div>
           )}
 
-          {/* Worker Notifications Panel (preserved from existing dashboard) */}
+          {isPM && calendar && <CalendarMonth calendar={calendar} today={today} />}
+
+          {isPM && equipmentUsage && <EquipmentUsage usage={equipmentUsage} />}
+
+          {isPM && hasTeamSection && <TeamWorkload items={teamWorkload} />}
+
           {isWorker && (
-            <section
-              id="notifications-section"
-              aria-labelledby="notifications-heading"
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <h2 id="notifications-heading" className="text-lg font-semibold text-slate-900">
-                  Notifications
-                </h2>
-                <div className="flex items-center gap-2">
-                  {unreadCount > 0 && (
-                    <span className="rounded-full bg-brand-navy px-2.5 py-1 text-xs font-medium text-white">
-                      {unreadCount} unread
-                    </span>
-                  )}
-                  {unreadCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => void handleMarkAllRead()}
-                      disabled={markingAll || markingId !== null}
-                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {markingAll ? 'Marking…' : 'Mark all as read'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {notificationError && (
-                <p
-                  className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-                  role="alert"
-                >
-                  {notificationError}
-                </p>
-              )}
-
-              {notifications.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-                  You’re all caught up.
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {notifications.map((notification) => {
-                    const unread = notification.readAt === null;
-                    return (
-                      <li
-                        key={notification.id}
-                        className={`rounded-xl border p-4 ${
-                          unread
-                            ? 'border-brand-navy/40 bg-white shadow-sm'
-                            : 'border-slate-200 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
-                              {notification.title}
-                              {unread && (
-                                <span className="rounded-full bg-brand-navy px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
-                                  Unread
-                                </span>
-                              )}
-                            </p>
-                            <p
-                              className={`mt-1 text-sm ${
-                                unread ? 'text-slate-700' : 'text-slate-600'
-                              }`}
-                            >
-                              {notification.message}
-                            </p>
-                            <time
-                              className="mt-2 block text-xs text-slate-400"
-                              dateTime={notification.createdAt}
-                            >
-                              {new Date(notification.createdAt).toLocaleString()}
-                            </time>
-                          </div>
-                          {unread && (
-                            <button
-                              type="button"
-                              onClick={() => void handleMarkRead(notification.id)}
-                              disabled={markingId !== null || markingAll}
-                              className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-navy transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {markingId === notification.id ? 'Marking…' : 'Mark as read'}
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
+            <WorkerTaskGroups
+              myTasks={dashboard.myTasks}
+              actingTaskId={actingTaskId}
+              actionError={actionError}
+              onStatusChange={handleStatusChange}
+            />
           )}
+
+          {isWorker && calendar && <CalendarMonth calendar={calendar} today={today} />}
+
+          {isViewer && <EmptyPanel text="No dashboard data is available for your role." />}
         </div>
       </div>
     </main>
