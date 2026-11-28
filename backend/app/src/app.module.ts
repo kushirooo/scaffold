@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { CsrfGuard } from './auth/guards/csrf.guard.js';
 import { validateEnvironment } from './config/env.validation.js';
 import { HealthModule } from './health/health.module.js';
+import { MilestonesModule } from './milestones/milestones.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { PrismaService } from './prisma/prisma.service.js';
@@ -41,6 +42,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule({
     UserManagementModule,
     ProjectsModule,
     TasksModule,
+    MilestonesModule,
     HealthModule,
     NotificationsModule,
     // Distributed tracing, auto-correlated logs, request/job metrics, error
