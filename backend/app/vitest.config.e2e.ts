@@ -7,6 +7,11 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
+    // The dashboard's Admin overview counts every row in the shared e2e
+    // database. Parallel spec files mutate those rows, so a count snapshot
+    // cannot settle. Run one spec file at a time; the total runtime stays well
+    // inside the CI limit.
+    fileParallelism: false,
     // Migrates and seeds the dedicated e2e database once per run; refuses to
     // run against the development database.
     globalSetup: ['./test/e2e/global-setup.ts'],
